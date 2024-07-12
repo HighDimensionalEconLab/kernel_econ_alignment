@@ -1,0 +1,11 @@
+jax>=0.4.26
+jaxlib>=0.4.26
+jaxopt>=0.8.3
+jsonargparse
+matplotlib
+numpy
+scipy>=1.13
+pyomo
+quadax
+torch
+pandas
