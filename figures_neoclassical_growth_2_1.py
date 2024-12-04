@@ -52,7 +52,7 @@ k_rel_error_neural = sol_neural["k_rel_error"]
 c_rel_error_neural = sol_neural["c_rel_error"]
 
 # Plotting
-plt.figure(figsize=(15, 5))
+plt.figure(figsize=(15, 8))
 
 ax_capital = plt.subplot(1, 2, 1)
 
