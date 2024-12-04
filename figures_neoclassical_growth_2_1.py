@@ -64,7 +64,7 @@ plt.plot(
     label=r"$\hat{x}(t)$: Neural Network Approximation",
 )
 plt.plot(t, k_benchmark, linestyle="--", color="k", label=r"$x(t)$: Benchmark Solution")
-plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
+#plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
 
 plt.ylabel("Capital: $x(t)$")
 plt.xlabel("Time")
@@ -81,7 +81,7 @@ plt.plot(
     label=r"$\hat{y}(t)$: Neural Network Approximation",
 )
 plt.plot(t, c_benchmark, linestyle="--", color="k", label=r"$y(t)$: Benchmark Solution")
-plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
+#plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
 
 plt.ylabel("Consumption: $y(t)$")
 plt.xlabel("Time")
