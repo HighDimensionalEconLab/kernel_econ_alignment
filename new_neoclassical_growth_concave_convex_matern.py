@@ -25,7 +25,7 @@ def neoclassical_growth_concave_convex_matern(
     solver_type: str = "ipopt",
     train_T: float = 40.0,
     train_points: int = 41,
-    test_T: float = 40,
+    test_T: float = 50,
     test_points: int = 41,
     benchmark_T: float = 60.0,
     benchmark_points: int = 300,
@@ -114,13 +114,17 @@ def neoclassical_growth_concave_convex_matern(
 
     @m.Objective(sense=pyo.minimize)
     def min_norm(m):  # alpha @ K @ alpha not supported by pyomo
-        return  sum(K[i, j] * m.alpha_z[i] * m.alpha_z[j] for i in m.I for j in m.I)
+        return  sum(K[i, j] * m.alpha_z[i] * m.alpha_z[j] for i in m.I for j in m.I) + 0.0001*(
+          sum(K[i, j] * m.alpha_k[i] * m.alpha_k[j] for i in m.I for j in m.I) + 
+          sum(K[i, j] * m.alpha_mu[i] * m.alpha_mu[j] for i in m.I for j in m.I) +
+          sum(K[i, j] * m.alpha_c[i] * m.alpha_c[j] for i in m.I for j in m.I) 
+        )
 
     solver = pyo.SolverFactory(solver_type)
     options = {
-        "tol": 1e-6,  # Tighten the tolerance for optimality
-        "dual_inf_tol": 1e-6,  # Tighten the dual infeasibility tolerance
-        "constr_viol_tol": 1e-6,  # Tighten the constraint violation tolerance
+        "tol": 1e-8,  # Tighten the tolerance for optimality
+        "dual_inf_tol": 1e-8,  # Tighten the dual infeasibility tolerance
+        "constr_viol_tol": 1e-8,  # Tighten the constraint violation tolerance
         "max_iter": 5000,  # Adjust the maximum number of iterations if needed
     }  # See https://coin-or.github.io/Ipopt/OPTIONS.html for more details # can add options here.   See https://coin-or.github.io/Ipopt/OPTIONS.html#OPTIONS_AMPL
     results = solver.solve(m, tee=verbose, options=options)

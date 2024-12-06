@@ -12,7 +12,7 @@ from mpl_toolkits.axes_grid1.inset_locator import (
 
 fontsize = 14
 ticksize = 14
-figsize = (15, 5)
+figsize = (15, 10)
 params = {
     "font.family": "serif",
     "figure.figsize": figsize,
@@ -35,7 +35,7 @@ sol_3 = neoclassical_growth_concave_convex_matern(k_0=3.0, train_points=20)
 sol_4 = neoclassical_growth_concave_convex_matern(k_0=4.0, train_points=20)
 output_path = "figures/neoclassical_growth_model_concave_convex.pdf"
 
-plt.figure(figsize=(15, 8))
+plt.figure(figsize=(10, 6))
 
 k_hat_1 = sol_1["k_test"]
 k_hat_2 = sol_2["k_test"]
@@ -75,30 +75,14 @@ plt.xlabel("Time")
 plt.legend()  # Show legend with labels
 
 plt.savefig(output_path, format="pdf")
-'''
 sols = [
     neoclassical_growth_concave_convex_matern(k_0=k_0, train_points=20)
     for k_0 in np.linspace(0.5, 4.0, 70)
 ]
-'''
-# First sub-interval
-sols_1 = [
-    neoclassical_growth_concave_convex_matern(k_0=k_0, train_points=20)
-    for k_0 in np.linspace(0.5, 1.5, 35)
-]
-
-# Second sub-interval
-sols_2 = [
-    neoclassical_growth_concave_convex_matern(k_0=k_0, train_points=20)
-    for k_0 in np.linspace(2.5, 4.0, 35)
-]
-
-# Combine the results if needed
-sols = sols_1 + sols_2
 
 output_path = "figures/neoclassical_growth_model_concave_convex_threshold.pdf"
 
-plt.figure(figsize=(15, 5))
+plt.figure(figsize=(10,6))
 
 T = sols[0]["t_train"].max()
 t = sols[0]["t_test"]

@@ -12,7 +12,7 @@ from mpl_toolkits.axes_grid1.inset_locator import (
 
 fontsize = 14
 ticksize = 14
-figsize = (15, 10)
+figsize = (10, 6)
 params = {
     "font.family": "serif",
     "figure.figsize": figsize,
@@ -31,7 +31,7 @@ plt.rcParams.update(params)
 ## Plot given solution
 
 sol_matern = neoclassical_growth_matern()
-sol_neural = neoclassical_growth_neural()
+sol_neural = neoclassical_growth_neural(train_T = 40.0, train_points= 41, test_T = 50.0)
 output_path = "figures/neoclassical_growth_model_2_by_1.pdf"
 
 zoom = True
@@ -64,7 +64,7 @@ plt.plot(
     label=r"$\hat{x}(t)$: Neural Network Approximation",
 )
 plt.plot(t, k_benchmark, linestyle="--", color="k", label=r"$x(t)$: Benchmark Solution")
-#plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
+plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
 
 plt.ylabel("Capital: $x(t)$")
 plt.xlabel("Time")
@@ -81,7 +81,7 @@ plt.plot(
     label=r"$\hat{y}(t)$: Neural Network Approximation",
 )
 plt.plot(t, c_benchmark, linestyle="--", color="k", label=r"$y(t)$: Benchmark Solution")
-#plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
+plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
 
 plt.ylabel("Consumption: $y(t)$")
 plt.xlabel("Time")
