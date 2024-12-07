@@ -59,7 +59,6 @@ def neoclassical_growth_matern(
     m.mu_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=k_0**a - delta * k_0)
     m.z_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=k_0**a - delta * k_0)
 
-
     # Map kernels to variables. Pyomo doesn't support c_0 + K_tilde @ m.alpha_c
     def mu(m, i):
         return m.mu_0 + sum(K_tilde[i, j] * m.alpha_mu[j] for j in m.I)
@@ -69,10 +68,10 @@ def neoclassical_growth_matern(
 
     def k(m, i):
         return k_0 + sum(K_tilde[i, j] * m.alpha_k[j] for j in m.I)
-    
-    def z(m,i): 
+
+    def z(m, i):
         return m.z_0 + sum(K_tilde[i, j] * m.alpha_z[j] for j in m.I)
-    
+
     def dmu_dt(m, i):
         return sum(K[i, j] * m.alpha_mu[j] for j in m.I)
 
@@ -86,19 +85,19 @@ def neoclassical_growth_matern(
 
     @m.Constraint(m.I)  # for each index in m.I
     def euler(m, i):
-        return dmu_dt(m, i) == - mu(m, i) * (a * k(m, i) ** (a - 1) - delta - rho_hat)
+        return dmu_dt(m, i) == -mu(m, i) * (a * k(m, i) ** (a - 1) - delta - rho_hat)
 
     @m.Constraint(m.I)  # for each index in m.I
-    def shaddow(m, i):
-        return mu(m, i)*c(m, i) == 1.0  
+    def shadow_price(m, i):
+        return mu(m, i) * c(m, i) == 1.0
 
     @m.Constraint(m.I)  # for each index in m.I
-    def z_con(m, i):
-        return mu(m, i)*k(m, i)==  z(m,i)
+    def z_constraint(m, i):
+        return mu(m, i) * k(m, i) == z(m, i)
 
     @m.Objective(sense=pyo.minimize)
     def min_norm(m):  # alpha @ K @ alpha not supported by pyomo
-        return sum(K[i, j] * m.alpha_z[i] * m.alpha_z[j] for i in m.I for j in m.I) 
+        return sum(K[i, j] * m.alpha_z[i] * m.alpha_z[j] for i in m.I for j in m.I)
 
     solver = pyo.SolverFactory(solver_type)
     options = {

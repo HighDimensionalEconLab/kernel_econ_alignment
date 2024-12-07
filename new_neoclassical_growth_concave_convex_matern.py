@@ -58,9 +58,8 @@ def neoclassical_growth_concave_convex_matern(
     m.alpha_k = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
     m.alpha_z = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
     m.c_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=1.0)
-    m.mu_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=1.0/m.c_0) #mu*c =1
-    m.z_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=k_0*m.mu_0) #mu*k = z
-
+    m.mu_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=1.0 / m.c_0)  # mu*c =1
+    m.z_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=k_0 * m.mu_0)  # mu*k = z
 
     # Map kernels to variables. Pyomo doesn't support c_0 + K_tilde @ m.alpha_c
     def mu(m, i):
@@ -71,17 +70,16 @@ def neoclassical_growth_concave_convex_matern(
 
     def k(m, i):
         return k_0 + sum(K_tilde[i, j] * m.alpha_k[j] for j in m.I)
-    
-    def z(m,i): 
+
+    def z(m, i):
         return m.z_0 + sum(K_tilde[i, j] * m.alpha_z[j] for j in m.I)
-    
+
     def dmu_dt(m, i):
         return sum(K[i, j] * m.alpha_mu[j] for j in m.I)
 
     def dk_dt(m, i):
         return sum(K[i, j] * m.alpha_k[j] for j in m.I)
 
-    
     # Production function
     base = b_2 / (b_1 - 1)
     exponent = 1 / a
@@ -98,26 +96,28 @@ def neoclassical_growth_concave_convex_matern(
     # Define constraints and objective for model and solve
     @m.Constraint(m.I)  # for each index in m.I
     def resource_constraint(m, i):
-        return dk_dt(m, i) == f(k(m, i))  - delta * k(m, i) - c(m, i)
+        return dk_dt(m, i) == f(k(m, i)) - delta * k(m, i) - c(m, i)
 
     @m.Constraint(m.I)  # for each index in m.I
     def euler(m, i):
-        return dmu_dt(m, i) == - mu(m, i) * (f_prime(k(m, i))- delta - rho_hat)
+        return dmu_dt(m, i) == -mu(m, i) * (f_prime(k(m, i)) - delta - rho_hat)
 
     @m.Constraint(m.I)  # for each index in m.I
-    def shaddow(m, i):
-        return c(m, i)*mu(m, i) -1.0 == 0.0
+    def shadow_price(m, i):
+        return c(m, i) * mu(m, i) - 1.0 == 0.0
 
     @m.Constraint(m.I)  # for each index in m.I
-    def z_con(m, i):
-        return mu(m, i)*k(m, i) - z(m,i) == 0.0 
+    def z_constraint(m, i):
+        return mu(m, i) * k(m, i) - z(m, i) == 0.0
 
     @m.Objective(sense=pyo.minimize)
     def min_norm(m):  # alpha @ K @ alpha not supported by pyomo
-        return  sum(K[i, j] * m.alpha_z[i] * m.alpha_z[j] for i in m.I for j in m.I) + 0.0001*(
-          sum(K[i, j] * m.alpha_k[i] * m.alpha_k[j] for i in m.I for j in m.I) + 
-          sum(K[i, j] * m.alpha_mu[i] * m.alpha_mu[j] for i in m.I for j in m.I) +
-          sum(K[i, j] * m.alpha_c[i] * m.alpha_c[j] for i in m.I for j in m.I) 
+        return sum(
+            K[i, j] * m.alpha_z[i] * m.alpha_z[j] for i in m.I for j in m.I
+        ) + 0.0001 * (
+            sum(K[i, j] * m.alpha_k[i] * m.alpha_k[j] for i in m.I for j in m.I)
+            + sum(K[i, j] * m.alpha_mu[i] * m.alpha_mu[j] for i in m.I for j in m.I)
+            + sum(K[i, j] * m.alpha_c[i] * m.alpha_c[j] for i in m.I for j in m.I)
         )
 
     solver = pyo.SolverFactory(solver_type)

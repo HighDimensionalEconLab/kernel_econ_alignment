@@ -1,6 +1,6 @@
 import pandas as pd
 
-from neoclassical_growth_matern import neoclassical_growth_matern
+from new_neoclassical_growth_matern import neoclassical_growth_matern
 
 sol_default = neoclassical_growth_matern()
 sol_nu_1_5 = neoclassical_growth_matern(nu=1.5)
@@ -36,10 +36,9 @@ with open("figures/neoclassical_growth_model_nu_rho.tex", "w") as f:
     f.write(df.to_latex(index=False, float_format="%.1e"))
 
 
-
- #r"Avg. of Rel. Error: $\hat{k}(t)$": [
-            #sol["k_rel_error"].mean().item() for sol in sols
-        #],
-        #r"Avg. of Rel. Error: $\hat{c}(t)$": [
-            #sol["c_rel_error"].mean().item() for sol in sols
-        #],
+# r"Avg. of Rel. Error: $\hat{k}(t)$": [
+# sol["k_rel_error"].mean().item() for sol in sols
+# ],
+# r"Avg. of Rel. Error: $\hat{c}(t)$": [
+# sol["c_rel_error"].mean().item() for sol in sols
+# ],

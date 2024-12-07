@@ -31,7 +31,7 @@ plt.rcParams.update(params)
 ## Plot given solution
 
 sol_matern = neoclassical_growth_matern()
-sol_neural = neoclassical_growth_neural(train_T = 40.0, train_points= 41, test_T = 50.0)
+sol_neural = neoclassical_growth_neural(train_T=40.0, train_points=41, test_T=50.0)
 output_path = "figures/neoclassical_growth_model_2_by_1.pdf"
 
 zoom = True
@@ -182,3 +182,51 @@ if zoom == True:
         ax_consumption, axins, loc1=1, loc2=3, linewidth="0.7", ls="--", ec="0.5"
     )
 plt.savefig(output_path, format="pdf")
+
+k_rel_error_ylim = (1e-6, 2 * 1e-2)
+c_rel_error_ylim = (1e-7, 2 * 1e-2)
+output_path_rel_error = "figures/neoclassical_growth_model_2_by_1_rel_error.pdf"
+
+plt.figure(figsize=(15, 8))
+
+ax_rel_k = plt.subplot(1, 2, 1)
+
+plt.plot(
+    t,
+    k_rel_error_matern,
+    color="k",
+    label=r"$\varepsilon_x(t)$: Rel. Errors for $x(t)$, Matérn Kernel Approx.",
+)
+plt.plot(
+    t,
+    k_rel_error_neural,
+    color="b",
+    label=r"$\varepsilon_x(t)$: Rel. Errors for $x(t)$, Neural Network Approx.",
+)
+plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
+plt.yscale("log")  # Set y-scale to logarithmic
+plt.ylim(k_rel_error_ylim[0], k_rel_error_ylim[1])
+plt.xlabel("Time")
+plt.legend()  # Show legend with labels
+
+ax_rel_c = plt.subplot(1, 2, 2)
+
+plt.plot(
+    t,
+    c_rel_error_matern,
+    color="k",
+    label=r"$\varepsilon_y(t)$: Rel. Errors for $y(t)$, Matérn Kernel Approx.",
+)
+plt.plot(
+    t,
+    c_rel_error_neural,
+    color="b",
+    label=r"$\varepsilon_y(t)$: Rel. Errors for $y(t)$, Neural Network Approx.",
+)
+plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
+plt.yscale("log")  # Set y-scale to logarithmic
+plt.ylim(c_rel_error_ylim[0], c_rel_error_ylim[1])
+plt.xlabel("Time")
+plt.legend()  # Show legend with labels
+
+plt.savefig(output_path_rel_error, format="pdf")
