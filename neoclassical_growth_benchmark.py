@@ -5,6 +5,14 @@ from scipy.integrate import solve_bvp
 
 # Neoclassical Growth Benchmark solution
 def neoclassical_growth_benchmark(a, delta, r, sigma_crra, k_0, t_grid, perturb_k=1e-4):
+    #a: capital share
+    #delta: depreciation 
+    #r: discount rate
+    #sigma_crra: the constant relative risk aversion coefficient
+    #k_0: initial condition for capital
+    #t_grid: The grid for time where we want to solve the problem over (0,t_1,...,T)
+    #perturb_k : how far away from the steady-state capital you want the trajectory be at the terminal time, T
+
     k_ss = ((delta + r) / a) ** (1 / (a - 1))
     c_ss = a * k_ss**a - -delta * k_ss
     # perturb the final value of the capital at T to help convergence
