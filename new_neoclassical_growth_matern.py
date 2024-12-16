@@ -28,8 +28,7 @@ def neoclassical_growth_matern(
     benchmark_T: float = 60.0,
     benchmark_points: int = 300,
     train_points_list: Optional[List[float]] = None,
-    lambda_k: float = 1.0,
-    lambda_c: float = 1.0,
+    lambda_p: float = 0.0,
     verbose: bool = False,
 ):
     # if passing in `train_points` then doesn't us a grid.  Otherwise, uses linspace
@@ -97,7 +96,9 @@ def neoclassical_growth_matern(
 
     @m.Objective(sense=pyo.minimize)
     def min_norm(m):  # alpha @ K @ alpha not supported by pyomo
-        return sum(K[i, j] * m.alpha_z[i] * m.alpha_z[j] for i in m.I for j in m.I)
+        return sum(K[i, j] * m.alpha_z[i] * m.alpha_z[j] for i in m.I for j in m.I) + lambda_p*(sum(K[i, j] * m.alpha_c[i] * m.alpha_c[j] for i in m.I for j in m.I)
+        + sum(K[i, j] * m.alpha_k[i] * m.alpha_k[j] for i in m.I for j in m.I)+ sum(K[i, j] * m.alpha_mu[i] * m.alpha_mu[j] for i in m.I for j in m.I)
+        )
 
     solver = pyo.SolverFactory(solver_type)
     options = {

@@ -30,8 +30,6 @@ def neoclassical_growth_concave_convex_matern(
     benchmark_T: float = 60.0,
     benchmark_points: int = 300,
     train_points_list: Optional[List[float]] = None,
-    lambda_k: float = 1.0,
-    lambda_c: float = 1.0,
     verbose: bool = False,
 ):
     # if passing in `train_points` then doesn't us a grid.  Otherwise, uses linspace

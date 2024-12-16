@@ -204,7 +204,7 @@ def plot_neoclassical_growth(
 
 # Plots with various parameters
 sol = neoclassical_growth_matern(
-    train_points_list=[1.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
+    train_points_list=[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 36.0, 37.0, 38.0, 39.0, 40.0], lambda_p = 1e-4
 )
 plot_neoclassical_growth(
     sol,
