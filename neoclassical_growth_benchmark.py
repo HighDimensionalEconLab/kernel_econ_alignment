@@ -29,7 +29,7 @@ def neoclassical_growth_benchmark(a, delta, r, sigma_crra, k_0, t_grid, perturb_
         )
 
     def bc(ya, yb):
-        return jnp.array([ya[0] - k_0, yb[0] - k_T])
+        return jnp.array([ya[0] - k_0, yb[0] - k_T]) #boundary condition, k(0) = k_0, k(T) = k_T
 
     iv = 1 * jnp.ones((2, t_grid.size))
     solution = solve_bvp(ODE, bc, t_grid, iv)
