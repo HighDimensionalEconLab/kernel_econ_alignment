@@ -28,7 +28,7 @@ plt.rcParams.update(params)
 
 ## Plot given solution
 sol = human_capital_matern()
-output_path = "figures/human_capital.pdf"
+output_path = "figures/neoclassical_human_capital.pdf"
 
 t = sol["t_test"]
 T = sol["t_train"].max()
@@ -90,7 +90,7 @@ ax_investment_h = plt.subplot(3, 2, 6)
 plt.plot(t, mu_hat, color="grey", label=r"$\hat{\mu}(t)$")
 #plt.axhline(y=sol["i_h_ss"], linestyle="-.", color="grey", label=r"$i_h^*$: Steady-State")
 plt.axvline(x=T, color="grey", linestyle=":", label="Extrapolation/Interpolation")
-plt.ylabel("Human Capital Investment: $\mu(t)$")
+plt.ylabel("Co-state Variable: $\mu(t)$")
 plt.xlabel("Time")
 plt.legend()  # Show legend with labels
 
@@ -98,31 +98,3 @@ plt.legend()  # Show legend with labels
 plt.tight_layout()  # Adjust layout to prevent overlap
 
 plt.savefig(output_path, format="pdf")
-
-'''
-plt.figure(figsize=(15, 5))
-output_path = "figures/human_capital_i_k_i_h.pdf"
-
-
-ax_investment_k = plt.subplot(1, 2, 1)
-
-plt.plot(t, i_k_hat, color="k", label=r"$\hat{i}_k(t)$")
-#plt.axhline(y=sol["i_k_ss"], linestyle="-.", color="k", label=r"$i_k^*$: Steady-State")
-plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
-plt.ylabel("Physical Capital Investment: $i_k(t)$")
-plt.xlabel("Time")
-plt.legend()  # Show legend with labels
-
-ax_investment_h = plt.subplot(1, 2, 2)
-
-plt.plot(t, i_h_hat, color="grey", label=r"$\hat{i}_h(t)$")
-#plt.axhline(y=sol["i_h_ss"], linestyle="-.", color="grey", label=r"$i_h^*$: Steady-State")
-plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
-plt.ylabel("Human Capital Investment: $i_h(t)$")
-plt.xlabel("Time")
-plt.legend()  # Show legend with labels
-plt.tight_layout()  # Adjust layout to prevent overlap
-
-
-plt.savefig(output_path, format="pdf")
-'''
