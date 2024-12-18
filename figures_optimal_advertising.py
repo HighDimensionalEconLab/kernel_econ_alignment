@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-from optimal_advertising_matern import (
+from new_optimal_advertising_matern import (
     optimal_advertising_matern,
 )
 
@@ -50,9 +50,9 @@ plt.xlabel("Time")
 plt.legend()  # Show legend with labels
 
 ax_mu = plt.subplot(1, 2, 2)
-plt.plot(t, mu_hat, color="b", label=r"$\hat{y}(t)$")
+plt.plot(t, mu_hat, color="grey", label=r"$\hat{y}(t)$")
 #plt.axhline(y=sol["mu_ss"], linestyle="-.", color="b", label=r"$\mu^*$: Steady-State")
-plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
+plt.axvline(x=T, color="grey", linestyle=":", label="Extrapolation/Interpolation")
 plt.ylabel("Costate Variable: $y(t)$")
 plt.xlabel("Time")
 plt.legend()  # Show legend with labels

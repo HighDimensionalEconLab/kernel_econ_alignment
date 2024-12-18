@@ -28,7 +28,7 @@ def neoclassical_growth_matern(
     benchmark_T: float = 60.0,
     benchmark_points: int = 300,
     train_points_list: Optional[List[float]] = None,
-    lambda_p: float = 0.0,
+    lambda_p: float = 0.0, #Smooting penalty for the optimizer, just in case, right now set to zero
     verbose: bool = False,
 ):
     # if passing in `train_points` then doesn't us a grid.  Otherwise, uses linspace
@@ -99,7 +99,7 @@ def neoclassical_growth_matern(
         return sum(K[i, j] * m.alpha_b[i] * m.alpha_b[j] for i in m.I for j in m.I) + lambda_p*(sum(K[i, j] * m.alpha_c[i] * m.alpha_c[j] for i in m.I for j in m.I)
         + sum(K[i, j] * m.alpha_k[i] * m.alpha_k[j] for i in m.I for j in m.I)+ sum(K[i, j] * m.alpha_mu[i] * m.alpha_mu[j] for i in m.I for j in m.I)
         )
-
+        #lambda_p makes sure the optimizer returns smooth (non-wiggly solutions in the extrapolation), we set it to zero
     solver = pyo.SolverFactory(solver_type)
     options = {
         "tol": 1e-14,  # Tighten the tolerance for optimality
