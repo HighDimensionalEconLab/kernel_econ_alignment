@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import os
 from new_neoclassical_growth_matern import neoclassical_growth_matern
-from neoclassical_growth_neural import neoclassical_growth_neural
+from new_neoclassical_growth_neural import neoclassical_growth_neural
 
 from mpl_toolkits.axes_grid1.inset_locator import (
     zoomed_inset_axes,
