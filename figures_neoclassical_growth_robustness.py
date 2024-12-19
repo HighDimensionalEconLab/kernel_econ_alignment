@@ -1,9 +1,9 @@
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import os
-from neoclassical_growth_matern import neoclassical_growth_matern
-from neoclassical_growth_dae_matern import neoclassical_growth_dae_matern
-from neoclassical_growth_neural import neoclassical_growth_neural
+from new_neoclassical_growth_matern import neoclassical_growth_matern
+#from neoclassical_growth_dae_matern import neoclassical_growth_dae_matern
+from new_neoclassical_growth_neural import neoclassical_growth_neural
 
 from mpl_toolkits.axes_grid1.inset_locator import (
     zoomed_inset_axes,
@@ -258,7 +258,7 @@ plot_neoclassical_growth(
     zoom_loc=[75, 85],
 )
 
-
+"""
 sol = neoclassical_growth_dae_matern()
 plot_neoclassical_growth(
     sol,
@@ -268,3 +268,4 @@ plot_neoclassical_growth(
     zoom=True,
     zoom_loc=[75, 85],
 )
+"""
