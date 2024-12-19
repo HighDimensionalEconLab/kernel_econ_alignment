@@ -86,7 +86,7 @@ def neoclassical_growth_neural(
     learning_rate = 1e-3
     optimizer = torch.optim.Adam(q_hat.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.9)
-    num_epochs = 1000
+    num_epochs = 2000
 
     for epoch in range(num_epochs):
         for i, time in enumerate(train):
