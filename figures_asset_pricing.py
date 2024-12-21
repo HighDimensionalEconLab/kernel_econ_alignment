@@ -10,9 +10,9 @@ from mpl_toolkits.axes_grid1.inset_locator import (
     inset_axes,
 )
 
-fontsize = 14
-ticksize = 14
-figsize = (15, 10)
+fontsize = 17
+ticksize = 16
+figsize = (15, 8)
 params = {
     "font.family": "serif",
     "figure.figsize": figsize,
@@ -47,7 +47,7 @@ def plot_asset_pricing(
     p_rel_error_neural = sol_neural["p_rel_error"]
 
     # Plotting
-    plt.figure(figsize=(15, 5))
+    plt.figure(figsize=(15, 8))
 
     ax_prices = plt.subplot(1, 2, 1)
 

@@ -10,9 +10,9 @@ from mpl_toolkits.axes_grid1.inset_locator import (
     inset_axes,
 )
 
-fontsize = 14
-ticksize = 14
-figsize = (15, 10)
+fontsize = 17
+ticksize = 16
+figsize = (15, 8)
 params = {
     "font.family": "serif",
     "figure.figsize": figsize,
@@ -35,7 +35,7 @@ sol_3 = neoclassical_growth_concave_convex_matern(k_0=3.0, train_points=20)
 sol_4 = neoclassical_growth_concave_convex_matern(k_0=4.0, train_points=20)
 output_path = "figures/neoclassical_growth_model_concave_convex.pdf"
 
-plt.figure(figsize=(10, 6))
+plt.figure(figsize=(15, 8))
 
 k_hat_1 = sol_1["k_test"]
 k_hat_2 = sol_2["k_test"]
@@ -82,7 +82,7 @@ sols = [
 
 output_path = "figures/neoclassical_growth_model_concave_convex_threshold.pdf"
 
-plt.figure(figsize=(10,6))
+plt.figure(figsize=(15,8))
 
 T = sols[0]["t_train"].max()
 t = sols[0]["t_test"]

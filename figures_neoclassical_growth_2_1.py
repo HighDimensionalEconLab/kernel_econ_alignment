@@ -10,9 +10,9 @@ from mpl_toolkits.axes_grid1.inset_locator import (
     inset_axes,
 )
 
-fontsize = 14
-ticksize = 14
-figsize = (10, 6)
+fontsize = 17
+ticksize = 16
+figsize = (15, 8)
 params = {
     "font.family": "serif",
     "figure.figsize": figsize,
