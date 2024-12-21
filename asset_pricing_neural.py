@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import jsonargparse
-from asset_pricing_benchmark import p_f_array
+from asset_pricing_benchmark import mu_f_array
 from typing import List, Optional
 
 
@@ -11,10 +11,10 @@ def asset_pricing_neural(
     r: float = 0.1,
     c: float = 0.02,
     g: float = -0.2,
-    y_0: float = 0.01,
-    train_T: float = 30.0,
-    train_points: int = 31,
-    test_T: float = 40.0,
+    x_0: float = 0.01,
+    train_T: float = 40.0,
+    train_points: int = 41,
+    test_T: float = 50.0,
     test_points: int = 100,
     train_points_list: Optional[List[float]] = None,
     seed=123,
@@ -38,13 +38,13 @@ def asset_pricing_neural(
         return (model(t) - model(t - sqrt_eps)) / sqrt_eps
 
     # Dividends
-    def y(i):
-        return (y_0 + (c / g)) * np.exp(g * i) - (c / g)
+    def x(i):
+        return (x_0 + (c / g)) * np.exp(g * i) - (c / g)
 
     def G(model, t):
-        p = model(t)
-        dpdt = r * p - y(t)
-        return dpdt
+        mu = model(t)
+        dmudt = r * mu - x(t)
+        return dmudt
 
     torch.manual_seed(seed)
 
@@ -92,17 +92,17 @@ def asset_pricing_neural(
         scheduler.step()
 
     # Generate test_data and compare to the benchmark
-    p_benchmark = p_f_array(np.array(test_data), c, g, r, y_0)
-    p_test = np.array(q_hat(test_data)[:, [0]].detach())
+    mu_benchmark = mu_f_array(np.array(test_data), c, g, r, x_0)
+    mu_test = np.array(q_hat(test_data)[:, [0]].detach())
 
-    p_rel_error = np.abs(p_benchmark - p_test) / p_benchmark
-    print(f"E(|rel_error(p)|) = {p_rel_error.mean()}")
+    mu_rel_error = np.abs(mu_benchmark - mu_test) / mu_benchmark
+    print(f"E(|rel_error(p)|) = {mu_rel_error.mean()}")
     return {
         "t_train": train_data,
         "t_test": test_data,
-        "p_test": p_test,
-        "p_benchmark": p_benchmark,
-        "p_rel_error": p_rel_error,
+        "p_test": mu_test,
+        "p_benchmark": mu_benchmark,
+        "p_rel_error": mu_rel_error,
         "neural_net_solution": q_hat,  # interpolator
     }
 

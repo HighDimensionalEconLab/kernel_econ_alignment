@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import os
-from asset_pricing_matern import asset_pricing_matern
+from new_asset_pricing_matern import asset_pricing_matern
 from asset_pricing_neural import asset_pricing_neural
 
 from mpl_toolkits.axes_grid1.inset_locator import (
@@ -52,21 +52,21 @@ def plot_asset_pricing(
     ax_prices = plt.subplot(1, 2, 1)
 
     plt.plot(
-        t, p_hat_matern, color="k", label=r"$\hat{y}(t)$: Matérn Kernel Approximation"
+        t, p_hat_matern, color="k", label=r"$\hat{\mu}(t)$: Matérn Kernel Approximation"
     )
     plt.plot(
-        t, p_hat_neural, color="b", label=r"$\hat{y}(t)$: Neural Network Approximation"
+        t, p_hat_neural, color="b", label=r"$\hat{\mu}(t)$: Neural Network Approximation"
     )
     plt.plot(
         t,
         p_benchmark,
         linestyle="--",
         color="k",
-        label=r"$y_f(t)$: Closed-Form Solution",
+        label=r"$\mu_f(t)$: Closed-Form Solution",
     )
     plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
 
-    plt.ylabel(r"Price: $y(t)$")
+    plt.ylabel(r"Price: $\mu(t)$")
     plt.xlabel("Time")
     plt.legend()  # Show legend with labels
 
@@ -76,13 +76,13 @@ def plot_asset_pricing(
         t,
         p_rel_error_matern,
         color="k",
-        label=r"$\varepsilon_y(t)$: Relative Errors, Matérn Kernel Approx.",
+        label=r"$\varepsilon_{\mu}(t)$: Relative Errors, Matérn Kernel Approx.",
     )
     plt.plot(
         t,
         p_rel_error_neural,
         color="b",
-        label=r"$\varepsilon_y(t)$: Relative Errors, Neural Network Approx.",
+        label=r"$\varepsilon_{\mu}(t)$: Relative Errors, Neural Network Approx.",
     )
     plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
     plt.yscale("log")  # Set y-scale to logarithmic
@@ -146,7 +146,7 @@ def plot_asset_pricing(
 sol_matern = asset_pricing_matern()
 sol_neural = asset_pricing_neural()
 plot_asset_pricing(
-    sol_matern, sol_neural, "figures/asset_pricing_contiguous.pdf"
+    sol_matern, sol_neural, "figures/asset_pricing.pdf"
 )
 
 # sol = asset_pricing_matern(train_points_list=[0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0])
