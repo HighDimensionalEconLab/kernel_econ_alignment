@@ -50,10 +50,10 @@ plt.xlabel("Time")
 plt.legend()  # Show legend with labels
 
 ax_mu = plt.subplot(1, 2, 2)
-plt.plot(t, mu_hat, color="grey", label=r"$\hat{y}(t)$")
+plt.plot(t, mu_hat, color="k", label=r"$\hat{\mu}(t)$")
 #plt.axhline(y=sol["mu_ss"], linestyle="-.", color="b", label=r"$\mu^*$: Steady-State")
 plt.axvline(x=T, color="grey", linestyle=":", label="Extrapolation/Interpolation")
-plt.ylabel("Costate Variable: $y(t)$")
+plt.ylabel("Costate Variable: $\mu(t)$")
 plt.xlabel("Time")
 plt.legend()  # Show legend with labels
 plt.tight_layout()

@@ -21,11 +21,11 @@ def optimal_advertising_matern(
     sigma: float = 1.0,
     rho: float = 15,
     solver_type: str = "ipopt",
-    train_T: float = 30.0,
-    train_points: int = 31,
-    test_T: float = 40.0,
+    train_T: float = 40.0,
+    train_points: int = 81,
+    test_T: float = 50.0,
     test_points: int = 100,
-    benchmark_T: float = 40.0,
+    benchmark_T: float = 60.0,
     benchmark_points: int = 300,
     train_points_list: Optional[List[float]] = None,
     verbose: bool = False,
@@ -51,7 +51,9 @@ def optimal_advertising_matern(
     m.I = range(N)
     m.alpha_x = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
     m.alpha_mu = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
+    m.alpha_b = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
     m.mu_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=0.0)
+    m.b_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=0.0)
 
     # Map kernels to variables. Pyomo doesn't support mu_0 + K_tilde @ m.alpha_mu
     def mu(m, i):
@@ -66,6 +68,9 @@ def optimal_advertising_matern(
     def dx_dt(m, i):
         return sum(K[i, j] * m.alpha_x[j] for j in m.I)
 
+    def b(m, i):
+        return m.b_0 + sum(K_tilde[i, j] * m.alpha_b[j] for j in m.I)
+    
     # Define constraints and objective for model and solve
     @m.Constraint(m.I)  # for each index in m.I
     def dx_dt_constraint(m, i):
@@ -76,14 +81,21 @@ def optimal_advertising_matern(
     def dmu_dt_constraint(m, i):
         return dmu_dt(m, i) == -gamma + (rho_hat + beta)*mu(m, i) + (mu(m, i)**(1 / (1 - kappa)))*((kappa * (1 - x(m, i)))**(kappa / (1 - kappa)))
 
+    @m.Constraint(m.I)  # for each index in m.I
+    def b_constraint(m, i):
+        return mu(m, i) * x(m, i) == b(m, i)
+    
     @m.Objective(sense=pyo.minimize)
     def min_norm(m):  # alpha @ K @ alpha not supported by pyomo
-        return sum(K[i, j] * m.alpha_mu[i] * m.alpha_mu[j] for i in m.I for j in m.I) 
+        return sum(K[i, j] * m.alpha_b[i] * m.alpha_b[j] for i in m.I for j in m.I) 
 
     solver = pyo.SolverFactory(solver_type)
-    options = (
-        {}
-    )  # can add options here.   See https://coin-or.github.io/Ipopt/OPTIONS.html#OPTIONS_AMPL
+    options = {
+        "tol": 1e-6,  # Tighten the tolerance for optimality
+        "dual_inf_tol": 1e-6,  # Tighten the dual infeasibility tolerance
+        "constr_viol_tol": 1e-6,  # Tighten the constraint violation tolerance
+        "max_iter": 1000,  # Adjust the maximum number of iterations if needed
+    } 
     results = solver.solve(m, tee=verbose, options=options)
     if not results.solver.termination_condition == TerminationCondition.optimal:
         print(str(results.solver))  # raise exception?
