@@ -11,7 +11,7 @@ from mpl_toolkits.axes_grid1.inset_locator import (
 
 fontsize = 17
 ticksize = 16
-figsize = (15, 8)
+figsize = (15, 10)
 params = {
     "font.family": "serif",
     "figure.figsize": figsize,

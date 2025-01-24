@@ -4,7 +4,7 @@ from new_neoclassical_growth_matern import neoclassical_growth_matern
 
 sol_default = neoclassical_growth_matern()
 sol_nu_1_5 = neoclassical_growth_matern(nu=1.5)
-sol_nu_2_5 = neoclassical_growth_matern(nu=2.5)
+sol_nu_2_5 = neoclassical_growth_matern(nu=2.5,lambda_p = 1e-4)
 sol_rho_2 = neoclassical_growth_matern(rho=2)
 sol_rho_20 = neoclassical_growth_matern(rho=20)
 

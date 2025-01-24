@@ -2,8 +2,6 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import os
 from new_neoclassical_growth_matern import neoclassical_growth_matern
-#from neoclassical_growth_dae_matern import neoclassical_growth_dae_matern
-from new_neoclassical_growth_neural import neoclassical_growth_neural
 
 from mpl_toolkits.axes_grid1.inset_locator import (
     zoomed_inset_axes,
@@ -50,7 +48,7 @@ def plot_neoclassical_growth(
 
     ax_capital = plt.subplot(2, 2, 1)
 
-    plt.plot(t, k_hat, color="k", label=r"$\hat{x}(t)$: Matérn Kernel Approximation")
+    plt.plot(t, k_hat, color="k", label=r"$\hat{x}(t)$: Kernel Approximation") #Matérn
     plt.plot(
         t, k_benchmark, linestyle="--", color="k", label=r"$x(t)$: Benchmark Solution"
     )
@@ -66,7 +64,7 @@ def plot_neoclassical_growth(
         t,
         k_rel_error,
         color="k",
-        label=r"$\varepsilon_x(t)$: Rel. Errors for $x(t)$, Matérn Kernel Approx.",
+        label=r"$\varepsilon_x(t)$: Relative Errors for $x(t)$",
     )
     plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
     plt.yscale("log")  # Set y-scale to logarithmic
@@ -76,7 +74,7 @@ def plot_neoclassical_growth(
 
     ax_consumption = plt.subplot(2, 2, 3)
 
-    plt.plot(t, c_hat, color="b", label=r"$\hat{y}(t)$: Matérn Kernel Approximation")
+    plt.plot(t, c_hat, color="b", label=r"$\hat{y}(t)$: Kernel Approximation") #Matérn
     plt.plot(
         t, c_benchmark, linestyle="--", color="b", label=r"$y(t)$: Benchmark Solution"
     )
@@ -92,7 +90,7 @@ def plot_neoclassical_growth(
         t,
         c_rel_error,
         color="b",
-        label=r"$\varepsilon_y(t)$: Rel. Errors for $y(t)$, Matérn Kernel Approx.",
+        label=r"$\varepsilon_y(t)$: Reletaive Errors for $y(t)$",
     )
     plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
     plt.yscale("log")  # Set y-scale to logarithmic
@@ -196,7 +194,7 @@ def plot_neoclassical_growth(
 
 # Plots with various parameters
 sol = neoclassical_growth_matern(
-    train_points_list=[1.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0]
+    train_points_list=[0.0, 1.0, 3.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 38.0, 40.0], lambda_p = 1e-6
 )
 plot_neoclassical_growth(
     sol,
@@ -214,7 +212,7 @@ plot_neoclassical_growth(
     c_rel_error_ylim=(1e-4, 1e-1),
     zoom=False,
 )
-
+'''
 sol = neoclassical_growth_matern(nu=1.5)
 plot_neoclassical_growth(
     sol,
@@ -257,15 +255,4 @@ plot_neoclassical_growth(
     zoom=True,
     zoom_loc=[75, 85],
 )
-
-"""
-sol = neoclassical_growth_dae_matern()
-plot_neoclassical_growth(
-    sol,
-    "figures/neoclassical_growth_model_dae.pdf",
-    k_rel_error_ylim=(1e-7, 1e-2),
-    c_rel_error_ylim=(1e-6, 1e-2),
-    zoom=True,
-    zoom_loc=[75, 85],
-)
-"""
+'''
