@@ -12,7 +12,7 @@ from mpl_toolkits.axes_grid1.inset_locator import (
 
 fontsize = 17
 ticksize = 16
-figsize = (15, 8)
+figsize = (15, 7)
 params = {
     "font.family": "serif",
     "figure.figsize": figsize,
@@ -74,7 +74,9 @@ plt.ylabel("Consumption: $y(t)$")
 plt.xlabel("Time")
 plt.legend()  # Show legend with labels
 
-plt.savefig(output_path, format="pdf")
+#plt.savefig(output_path, format="pdf")
+
+
 sols = [
     neoclassical_growth_concave_convex_matern(k_0=k_0, train_points=20)
     for k_0 in np.linspace(0.5, 4.0, 70)

@@ -52,25 +52,20 @@ def neoclassical_growth_concave_convex_matern(
     m = pyo.ConcreteModel()
     m.I = range(N)
     m.alpha_mu = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
-    m.alpha_c = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
+    #m.alpha_c = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
     m.alpha_k = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
-    m.alpha_z = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
-    m.c_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=1.0)
-    m.mu_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=1.0 / m.c_0)  # mu*c =1
-    m.z_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=k_0 * m.mu_0)  # mu*k = z
+    #m.c_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=1.0)
+    m.mu_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=1.0)  # mu*c =1
 
     # Map kernels to variables. Pyomo doesn't support c_0 + K_tilde @ m.alpha_c
     def mu(m, i):
         return m.mu_0 + sum(K_tilde[i, j] * m.alpha_mu[j] for j in m.I)
 
-    def c(m, i):
-        return m.c_0 + sum(K_tilde[i, j] * m.alpha_c[j] for j in m.I)
+    #def c(m, i):
+        #return m.c_0 + sum(K_tilde[i, j] * m.alpha_c[j] for j in m.I)
 
     def k(m, i):
         return k_0 + sum(K_tilde[i, j] * m.alpha_k[j] for j in m.I)
-
-    def z(m, i):
-        return m.z_0 + sum(K_tilde[i, j] * m.alpha_z[j] for j in m.I)
 
     def dmu_dt(m, i):
         return sum(K[i, j] * m.alpha_mu[j] for j in m.I)
@@ -94,29 +89,20 @@ def neoclassical_growth_concave_convex_matern(
     # Define constraints and objective for model and solve
     @m.Constraint(m.I)  # for each index in m.I
     def resource_constraint(m, i):
-        return dk_dt(m, i) == f(k(m, i)) - delta * k(m, i) - c(m, i)
+        return dk_dt(m, i) == f(k(m, i)) - delta * k(m, i) - (1/mu(m, i))
 
     @m.Constraint(m.I)  # for each index in m.I
     def euler(m, i):
         return dmu_dt(m, i) == -mu(m, i) * (f_prime(k(m, i)) - delta - rho_hat)
 
-    @m.Constraint(m.I)  # for each index in m.I
-    def shadow_price(m, i):
-        return c(m, i) * mu(m, i) - 1.0 == 0.0
+    #@m.Constraint(m.I)  # for each index in m.I
+    #def shadow_price(m, i):
+        #return c(m, i) * mu(m, i) - 1.0 == 0.0
 
-    @m.Constraint(m.I)  # for each index in m.I
-    def z_constraint(m, i):
-        return mu(m, i) * k(m, i) - z(m, i) == 0.0
 
     @m.Objective(sense=pyo.minimize)
     def min_norm(m):  # alpha @ K @ alpha not supported by pyomo
-        return sum(
-            K[i, j] * m.alpha_z[i] * m.alpha_z[j] for i in m.I for j in m.I
-        ) + 0.0001 * (
-            sum(K[i, j] * m.alpha_k[i] * m.alpha_k[j] for i in m.I for j in m.I)
-            + sum(K[i, j] * m.alpha_mu[i] * m.alpha_mu[j] for i in m.I for j in m.I)
-            + sum(K[i, j] * m.alpha_c[i] * m.alpha_c[j] for i in m.I for j in m.I)
-        )
+        return sum(K[i, j] * m.alpha_mu[i] * m.alpha_mu[j] for i in m.I for j in m.I) + sum(K[i, j] * m.alpha_k[i] * m.alpha_k[j] for i in m.I for j in m.I)
 
     solver = pyo.SolverFactory(solver_type)
     options = {
@@ -129,9 +115,9 @@ def neoclassical_growth_concave_convex_matern(
     if not results.solver.termination_condition == TerminationCondition.optimal:
         print(str(results.solver))  # raise exception?
 
-    alpha_c = jnp.array([pyo.value(m.alpha_c[i]) for i in m.I])
+    alpha_mu = jnp.array([pyo.value(m.alpha_mu[i]) for i in m.I])
     alpha_k = jnp.array([pyo.value(m.alpha_k[i]) for i in m.I])
-    c_0 = pyo.value(m.c_0)
+    mu_0 = pyo.value(m.mu_0)
 
     # Interpolator using training data
     @jax.jit
@@ -140,8 +126,9 @@ def neoclassical_growth_concave_convex_matern(
         K_test, K_tilde_test = integrated_matern_kernel_matrices(
             test_data, train_data, nu, sigma, rho
         )
-        c_test = c_0 + K_tilde_test @ alpha_c
+        mu_test = mu_0 + K_tilde_test @ alpha_mu
         k_test = k_0 + K_tilde_test @ alpha_k
+        c_test  = 1.0 / mu_test
         return k_test, c_test
 
     # Generate test_data and compare to the benchmark
@@ -153,9 +140,9 @@ def neoclassical_growth_concave_convex_matern(
         "t_test": test_data,
         "k_test": k_test,
         "c_test": c_test,
-        "alpha_c": alpha_c,
+        "alpha_m": alpha_mu,
         "alpha_k": alpha_k,
-        "c_0": c_0,
+        "mu_0": mu_0,
         "solve_time": results.solver.Time,
         "kernel_solution": kernel_solution,  # interpolator
     }
