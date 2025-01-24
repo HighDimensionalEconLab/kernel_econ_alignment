@@ -19,7 +19,7 @@ def asset_pricing_matern(
     x_0: float = 0.01,
     nu: float = 0.5,
     sigma: float = 1.0,
-    rho: float = 10,
+    rho: float = 15,
     solver_type: str = "ipopt",
     train_T: float = 40.0,
     train_points: int = 41,
@@ -47,13 +47,18 @@ def asset_pricing_matern(
     m = pyo.ConcreteModel()
     m.I = range(N)
     m.alpha_mu = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
+    m.alpha_b = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
     m.mu_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=0.0)
+    m.b_0 = pyo.Var(within=pyo.NonNegativeReals, initialize= 0.0)
 
 
     # Map kernels to variables. Pyomo doesn't support p_0 + K_tilde @ m.alpha
     def mu(m, i):
         return m.mu_0 + sum(K_tilde[i, j] * m.alpha_mu[j] for j in m.I)
     
+    def b(m, i):
+        return m.b_0 + sum(K_tilde[i, j] * m.alpha_b[j] for j in m.I)
+
     def dmu_dt(m, i):
         return sum(K[i, j] * m.alpha_mu[j] for j in m.I)
 
@@ -65,10 +70,13 @@ def asset_pricing_matern(
     def dp_dt_constraint(m, i):
         return dmu_dt(m, i) == r * mu(m, i) - x(i)
     
+    @m.Constraint(m.I)  # for each index in m.I
+    def b_constraint(m, i):
+        return mu(m, i) * x(i) == b(m, i)
 
     @m.Objective(sense=pyo.minimize)
     def min_norm(m):  # alpha @ K @ alpha not supported by pyomo
-        return sum(K[i, j] * m.alpha_mu[i] * m.alpha_mu[j] for i in m.I for j in m.I) 
+        return sum(K[i, j] * m.alpha_b[i] * m.alpha_b[j] for i in m.I for j in m.I)
 
     solver = pyo.SolverFactory(solver_type)
     options = {

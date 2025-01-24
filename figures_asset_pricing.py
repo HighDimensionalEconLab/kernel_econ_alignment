@@ -2,7 +2,6 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import os
 from new_asset_pricing_matern import asset_pricing_matern
-from asset_pricing_neural import asset_pricing_neural
 
 from mpl_toolkits.axes_grid1.inset_locator import (
     zoomed_inset_axes,
@@ -12,7 +11,7 @@ from mpl_toolkits.axes_grid1.inset_locator import (
 
 fontsize = 17
 ticksize = 16
-figsize = (15, 8)
+figsize = (15, 7)
 params = {
     "font.family": "serif",
     "figure.figsize": figsize,
@@ -31,7 +30,6 @@ plt.rcParams.update(params)
 ## Plot given solution
 def plot_asset_pricing(
     sol_matern,
-    sol_neural,
     output_path,
     p_rel_error_ylim=(1e-5, 2 * 1e-2),
     zoom=True,
@@ -43,19 +41,14 @@ def plot_asset_pricing(
     p_benchmark = sol_matern["p_benchmark"]
     p_rel_error_matern = sol_matern["p_rel_error"]
 
-    p_hat_neural = sol_neural["p_test"]
-    p_rel_error_neural = sol_neural["p_rel_error"]
 
     # Plotting
-    plt.figure(figsize=(15, 8))
+    plt.figure(figsize=(15, 7))
 
     ax_prices = plt.subplot(1, 2, 1)
 
     plt.plot(
-        t, p_hat_matern, color="k", label=r"$\hat{\mu}(t)$: Matérn Kernel Approximation"
-    )
-    plt.plot(
-        t, p_hat_neural, color="b", label=r"$\hat{\mu}(t)$: Neural Network Approximation"
+        t, p_hat_matern, color="k", label=r"$\hat{\mu}(t)$: Kernel Approximation"#Mtérn 
     )
     plt.plot(
         t,
@@ -76,14 +69,9 @@ def plot_asset_pricing(
         t,
         p_rel_error_matern,
         color="k",
-        label=r"$\varepsilon_{\mu}(t)$: Relative Errors, Matérn Kernel Approx.",
-    )
-    plt.plot(
-        t,
-        p_rel_error_neural,
-        color="b",
-        label=r"$\varepsilon_{\mu}(t)$: Relative Errors, Neural Network Approx.",
-    )
+        label=r"$\varepsilon_{\mu}(t)$: Relative Errors",
+    )#, Matérn Kernel Approx.
+   
     plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
     plt.yscale("log")  # Set y-scale to logarithmic
     plt.ylim(p_rel_error_ylim[0], p_rel_error_ylim[1])
@@ -112,11 +100,7 @@ def plot_asset_pricing(
             p_hat_matern[time_window[0] - 1 : time_window[1] + 1],
             color="k",
         )
-        axins.plot(
-            t[time_window[0] - 1 : time_window[1] + 1],
-            p_hat_neural[time_window[0] - 1 : time_window[1] + 1],
-            color="b",
-        )
+
         axins.plot(
             t[time_window[0] - 1 : time_window[1] + 1],
             p_benchmark[time_window[0] - 1 : time_window[1] + 1],
@@ -144,10 +128,6 @@ def plot_asset_pricing(
 
 # Plots with various parameters
 sol_matern = asset_pricing_matern()
-sol_neural = asset_pricing_neural()
 plot_asset_pricing(
-    sol_matern, sol_neural, "figures/asset_pricing.pdf"
+    sol_matern, "figures/asset_pricing_contiguous.pdf"
 )
-
-# sol = asset_pricing_matern(train_points_list=[0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0])
-# plot_asset_pricing(sol, "figures/asset_pricing_sparse.pdf", zoom_loc=[5, 15])
