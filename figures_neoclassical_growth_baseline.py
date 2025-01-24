@@ -1,9 +1,7 @@
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import os
-from neoclassical_growth_matern import neoclassical_growth_matern
-from neoclassical_growth_dae_matern import neoclassical_growth_dae_matern
-from neoclassical_growth_neural import neoclassical_growth_neural
+from new_neoclassical_growth_matern import neoclassical_growth_matern
 
 from mpl_toolkits.axes_grid1.inset_locator import (
     zoomed_inset_axes,
@@ -11,9 +9,9 @@ from mpl_toolkits.axes_grid1.inset_locator import (
     inset_axes,
 )
 
-fontsize = 14
-ticksize = 14
-figsize = (15, 10)
+fontsize = 17
+ticksize = 16
+figsize = (15, 8)
 params = {
     "font.family": "serif",
     "figure.figsize": figsize,
@@ -32,10 +30,9 @@ plt.rcParams.update(params)
 ## Plot given solution
 
 sol_matern = neoclassical_growth_matern()
-sol_neural = neoclassical_growth_neural()
+#sol_neural = neoclassical_growth_neural(train_T=40.0, train_points=41, test_T=50.0)
 output_path = "figures/neoclassical_growth_model_baseline.pdf"
-k_rel_error_ylim = (1e-6, 2 * 1e-2)
-c_rel_error_ylim = (1e-7, 2 * 1e-2)
+
 zoom = True
 zoom_loc = [90, 99]
 
@@ -48,23 +45,12 @@ k_benchmark = sol_matern["k_benchmark"]
 k_rel_error_matern = sol_matern["k_rel_error"]
 c_rel_error_matern = sol_matern["c_rel_error"]
 
-c_hat_neural = sol_neural["c_test"]
-k_hat_neural = sol_neural["k_test"]
-k_rel_error_neural = sol_neural["k_rel_error"]
-c_rel_error_neural = sol_neural["c_rel_error"]
-
 # Plotting
 plt.figure(figsize=(15, 10))
 
 ax_capital = plt.subplot(2, 2, 1)
 
-plt.plot(t, k_hat_matern, color="k", label=r"$\hat{x}(t)$: Matérn Kernel Approximation")
-plt.plot(
-    t,
-    k_hat_neural,
-    color="b",
-    label=r"$\hat{x}(t)$: Neural Network Approximation",
-)
+plt.plot(t, k_hat_matern, color="k", label=r"$\hat{x}(t)$: Kernel Approximation")# Matérn
 plt.plot(t, k_benchmark, linestyle="--", color="k", label=r"$x(t)$: Benchmark Solution")
 plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
 
@@ -72,36 +58,27 @@ plt.ylabel("Capital: $x(t)$")
 plt.xlabel("Time")
 plt.legend()  # Show legend with labels
 
+
 ax_rel_k = plt.subplot(2, 2, 2)
+k_rel_error_ylim = (1e-6, 2 * 1e-2)
 
 plt.plot(
     t,
     k_rel_error_matern,
     color="k",
-    label=r"$\varepsilon_x(t)$: Rel. Errors for $x(t)$, Matérn Kernel Approx.",
-)
-plt.plot(
-    t,
-    k_rel_error_neural,
-    color="b",
-    label=r"$\varepsilon_x(t)$: Rel. Errors for $x(t)$, Neural Network Approx.",
+    label=r"$\varepsilon_x(t)$: Relative Errors for $x(t)$",
 )
 plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
 plt.yscale("log")  # Set y-scale to logarithmic
 plt.ylim(k_rel_error_ylim[0], k_rel_error_ylim[1])
 plt.xlabel("Time")
-plt.legend()  # Show legend with labels
+plt.legend() 
 
 ax_consumption = plt.subplot(2, 2, 3)
+c_rel_error_ylim = (1e-7, 2 * 1e-2)
 
-plt.plot(t, c_hat_matern, color="k", label=r"$\hat{y}(t)$: Matérn Kernel Approximation")
-plt.plot(
-    t,
-    c_hat_neural,
-    color="b",
-    label=r"$\hat{y}(t)$: Neural Network Approximation",
-)
-plt.plot(t, c_benchmark, linestyle="--", color="k", label=r"$y(t)$: Benchmark Solution")
+plt.plot(t, c_hat_matern, color="b", label=r"$\hat{y}(t)$: Kernel Approximation") #Matérn
+plt.plot(t, c_benchmark, linestyle="--", color="b", label=r"$y(t)$: Benchmark Solution")
 plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
 
 plt.ylabel("Consumption: $y(t)$")
@@ -113,20 +90,17 @@ ax_rel_c = plt.subplot(2, 2, 4)
 plt.plot(
     t,
     c_rel_error_matern,
-    color="k",
-    label=r"$\varepsilon_y(t)$: Rel. Errors for $y(t)$, Matérn Kernel Approx.",
-)
-plt.plot(
-    t,
-    c_rel_error_neural,
     color="b",
-    label=r"$\varepsilon_y(t)$: Rel. Errors for $y(t)$, Neural Network Approx.",
+    label=r"$\varepsilon_y(t)$: Reletaive Errors for $y(t)$",
 )
+
 plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
 plt.yscale("log")  # Set y-scale to logarithmic
 plt.ylim(c_rel_error_ylim[0], c_rel_error_ylim[1])
 plt.xlabel("Time")
 plt.legend()  # Show legend with labels
+
+
 
 # Zoom in part of the plot
 if zoom == True:
@@ -150,11 +124,7 @@ if zoom == True:
         k_hat_matern[time_window[0] - 1 : time_window[1] + 1],
         color="k",
     )
-    axins.plot(
-        t[time_window[0] - 1 : time_window[1] + 1],
-        k_hat_neural[time_window[0] - 1 : time_window[1] + 1],
-        color="b",
-    )
+  
     axins.plot(
         t[time_window[0] - 1 : time_window[1] + 1],
         k_benchmark[time_window[0] - 1 : time_window[1] + 1],
@@ -193,18 +163,14 @@ if zoom == True:
     axins.plot(
         t[time_window[0] - 1 : time_window[1] + 1],
         c_hat_matern[time_window[0] - 1 : time_window[1] + 1],
-        color="k",
-    )
-    axins.plot(
-        t[time_window[0] - 1 : time_window[1] + 1],
-        c_hat_neural[time_window[0] - 1 : time_window[1] + 1],
         color="b",
     )
+
     axins.plot(
         t[time_window[0] - 1 : time_window[1] + 1],
         c_benchmark[time_window[0] - 1 : time_window[1] + 1],
         linestyle="--",
-        color="k",
+        color="b",
     )
 
     x1, x2, y1, y2 = (
