@@ -43,7 +43,7 @@ T = sol["t_train"].max()
 t = sol["t_test"]
 
 ax_market_share = plt.subplot(1, 2, 1)
-plt.plot(t, x_hat, color="k", label=r"$\hat{x}(t)$")
+plt.plot(t, x_hat, color="k", label=r"$\hat{x}(t)$:  Kernel Approximation")
 #plt.axhline(y=sol["x_ss"], linestyle="-.", color="k", label=r"$x^*$: Steady-State")
 plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
 plt.ylabel("Market Share: $x(t)$")
@@ -51,7 +51,7 @@ plt.xlabel("Time")
 plt.legend()  # Show legend with labels
 
 ax_mu = plt.subplot(1, 2, 2)
-plt.plot(t, mu_hat, color="blue", label=r"$\hat{\mu}(t)$")
+plt.plot(t, mu_hat, color="blue", label=r"$\hat{\mu}(t)$:  Kernel Approximation")
 #plt.axhline(y=sol["mu_ss"], linestyle="-.", color="b", label=r"$\mu^*$: Steady-State")
 plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
 plt.ylabel("Co-state Variable: $\mu(t)$")
