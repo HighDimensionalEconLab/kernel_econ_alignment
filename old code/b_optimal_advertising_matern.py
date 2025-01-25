@@ -22,7 +22,7 @@ def optimal_advertising_matern(
     rho: float = 15,
     solver_type: str = "ipopt",
     train_T: float = 40.0,
-    train_points: int = 41,
+    train_points: int = 81,
     test_T: float = 50.0,
     test_points: int = 100,
     benchmark_T: float = 60.0,
@@ -51,9 +51,9 @@ def optimal_advertising_matern(
     m.I = range(N)
     m.alpha_x = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
     m.alpha_mu = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
-    m.alpha_u = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
+    m.alpha_b = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
     m.mu_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=0.0)
-    m.u_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=0.0)
+    m.b_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=0.0)
 
     # Map kernels to variables. Pyomo doesn't support mu_0 + K_tilde @ m.alpha_mu
     def mu(m, i):
@@ -68,26 +68,26 @@ def optimal_advertising_matern(
     def dx_dt(m, i):
         return sum(K[i, j] * m.alpha_x[j] for j in m.I)
 
-    def u(m, i):
-        return m.u_0 + sum(K_tilde[i, j] * m.alpha_u[j] for j in m.I)
+    def b(m, i):
+        return m.b_0 + sum(K_tilde[i, j] * m.alpha_b[j] for j in m.I)
     
     # Define constraints and objective for model and solve
     @m.Constraint(m.I)  # for each index in m.I
     def dx_dt_constraint(m, i):
-        return dx_dt(m, i) == (1 - x(m, i))*u(m, i)- beta*x(m,i)
+        return dx_dt(m, i) == ((1 - x(m, i))**(1 / (1 - kappa))) * ((kappa * mu(m, i))**(kappa / (1 - kappa))) - beta * x(m, i)
 
     gamma = (beta + rho_hat) / c
     @m.Constraint(m.I)  # for each index in m.I
     def dmu_dt_constraint(m, i):
-        return dmu_dt(m, i) == -gamma + (rho_hat + beta)*mu(m, i) + mu(m, i)*u(m, i)
+        return dmu_dt(m, i) == -gamma + (rho_hat + beta)*mu(m, i) + (mu(m, i)**(1 / (1 - kappa)))*((kappa * (1 - x(m, i)))**(kappa / (1 - kappa)))
 
     @m.Constraint(m.I)  # for each index in m.I
-    def shadow_price(m, i):
-        return u(m, i)**((1.0-kappa)/kappa) - kappa*mu(m, i)*(1 - x(m, i)) == 0.0
+    def b_constraint(m, i):
+        return mu(m, i) * x(m, i) == b(m, i)
     
     @m.Objective(sense=pyo.minimize)
     def min_norm(m):  # alpha @ K @ alpha not supported by pyomo
-        return sum(K[i, j] * m.alpha_mu[i] * m.alpha_mu[j] for i in m.I for j in m.I)+sum(K[i, j] * m.alpha_x[i] * m.alpha_x[j] for i in m.I for j in m.I) 
+        return sum(K[i, j] * m.alpha_b[i] * m.alpha_b[j] for i in m.I for j in m.I) 
 
     solver = pyo.SolverFactory(solver_type)
     options = {
@@ -102,8 +102,6 @@ def optimal_advertising_matern(
 
     alpha_mu = jnp.array([pyo.value(m.alpha_mu[i]) for i in m.I])
     alpha_x = jnp.array([pyo.value(m.alpha_x[i]) for i in m.I])
-    alpha_u = jnp.array([pyo.value(m.alpha_u[i]) for i in m.I])
-    u_0 = pyo.value(m.u_0)
     mu_0 = pyo.value(m.mu_0)
 
     # Interpolator using training data
@@ -115,11 +113,10 @@ def optimal_advertising_matern(
         )
         mu_test = mu_0 + K_tilde_test @ alpha_mu
         x_test = x_0 + K_tilde_test @ alpha_x
-        u_test = u_0 + K_tilde_test @ alpha_u
-        return x_test, mu_test, u_test
+        return x_test, mu_test
 
     # Generate test_data and compare to the benchmark
-    x_test, mu_test, u_test = kernel_solution(test_data)
+    x_test, mu_test = kernel_solution(test_data)
 
     print(f"solve_time(s) = {results.solver.Time}")
     return {
@@ -127,11 +124,9 @@ def optimal_advertising_matern(
         "t_test": test_data,
         "x_test": x_test,
         "mu_test": mu_test,
-        "u_test": u_test,
         "alpha_mu": alpha_mu,
         "alpha_x": alpha_x,
         "mu_0": mu_0,
-        "u_0": u_0,
         "solve_time": results.solver.Time,
         "kernel_solution": kernel_solution,  # interpolator
     }

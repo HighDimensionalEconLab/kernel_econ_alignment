@@ -12,9 +12,9 @@ from mpl_toolkits.axes_grid1.inset_locator import (
     inset_axes,
 )
 
-fontsize = 14
-ticksize = 14
-figsize = (15, 5)
+fontsize = 17
+ticksize = 16
+figsize = (15, 7)
 params = {
     "font.family": "serif",
     "figure.figsize": figsize,
@@ -33,10 +33,11 @@ plt.rcParams.update(params)
 sol = optimal_advertising_matern()
 output_path = "figures/optimal_advertising.pdf"
 
-plt.figure(figsize=(15, 5))
+plt.figure(figsize=(15, 7))
 
 x_hat = sol["x_test"]
 mu_hat = sol["mu_test"]
+u_hat = sol["u_test"]
 
 T = sol["t_train"].max()
 t = sol["t_test"]
@@ -50,10 +51,10 @@ plt.xlabel("Time")
 plt.legend()  # Show legend with labels
 
 ax_mu = plt.subplot(1, 2, 2)
-plt.plot(t, mu_hat, color="k", label=r"$\hat{\mu}(t)$")
+plt.plot(t, mu_hat, color="blue", label=r"$\hat{\mu}(t)$")
 #plt.axhline(y=sol["mu_ss"], linestyle="-.", color="b", label=r"$\mu^*$: Steady-State")
-plt.axvline(x=T, color="grey", linestyle=":", label="Extrapolation/Interpolation")
-plt.ylabel("Costate Variable: $\mu(t)$")
+plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
+plt.ylabel("Co-state Variable: $\mu(t)$")
 plt.xlabel("Time")
 plt.legend()  # Show legend with labels
 plt.tight_layout()
