@@ -32,7 +32,7 @@ plt.rcParams.update(params)
 
 
 sol_matern = neoclassical_growth_matern()
-output_path = "figures/neoclassical_growth_model_baseline.pdf"
+output_path = "figures/shooting_vs_kernel_neoclassical_growth_model.pdf"
 
 
 t = sol_matern["t_test"]
@@ -90,8 +90,8 @@ c_bvp_t = solution_bvp.y[1]
 
 #these are for the ODE Solver
 #c_0 = c_bvp_t[0]
-c_0 = c_benchmark[0]
-#c_0 = sol_matern["c_0"]
+#c_0 = c_benchmark[0]
+c_0 = sol_matern["c_0"]
 
 
 
@@ -105,7 +105,7 @@ t_span = (0, t.max().item())
 
 
 # Time points where we want the solution
-t_eval = np.linspace(t_span[0], t_span[1], 250)
+t_eval = np.linspace(t_span[0], t_span[1], 100)
 
 # Solve the ODE
 solution_ivp = solve_ivp(neoclassical_ode, t_span, z0, t_eval=t_eval)
@@ -113,12 +113,16 @@ solution_ivp = solve_ivp(neoclassical_ode, t_span, z0, t_eval=t_eval)
 k_t_ode = solution_ivp.y[0]
 c_t_ode = solution_ivp.y[1]
 
+k_ode_rel_error = np.abs((k_t_ode-k_benchmark)/k_benchmark)
+c_ode_rel_error = np.abs((c_t_ode-c_benchmark)/c_benchmark)
+
+
 plt.figure(figsize=(15, 10))
 
 ax_capital = plt.subplot(2, 2, 1)
 
 plt.plot(t, k_hat_matern, color="k", label=r"$\hat{x}(t)$: Kernel Approximation")# Matérn
-plt.plot(t_eval, k_t_ode, color="gray", label=r"$\hat{x}(t)$: Shooting method")# Matérn
+plt.plot(t_eval, k_t_ode, color="gray", label=r"$\hat{x}(t)$: Shooting Method")# Matérn
 #plt.plot(t, k_benchmark, linestyle="--", color="k", label=r"$x(t)$: Benchmark Solution")
 plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
 
@@ -128,13 +132,19 @@ plt.legend()  # Show legend with labels
 
 
 ax_rel_k = plt.subplot(2, 2, 2)
-k_rel_error_ylim = (1e-6, 2 * 1e-2)
+k_rel_error_ylim = (1e-6, 2 * 1e+1)
 
 plt.plot(
     t,
     k_rel_error_matern,
     color="k",
-    label=r"$\varepsilon_x(t)$: Relative Errors for $x(t)$",
+    label=r"$\varepsilon_x(t)$: Kernel Method",
+)
+plt.plot(
+    t,
+    k_ode_rel_error,
+    color="gray",
+    label=r"$\varepsilon_x(t)$: Shooting Method",
 )
 plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
 plt.yscale("log")  # Set y-scale to logarithmic
@@ -143,10 +153,10 @@ plt.xlabel("Time")
 plt.legend() 
 
 ax_consumption = plt.subplot(2, 2, 3)
-c_rel_error_ylim = (1e-7, 2 * 1e-2)
+c_rel_error_ylim = (1e-7, 2 * 1e+1)
 
 plt.plot(t, c_hat_matern, color="b", label=r"$\hat{y}(t)$: Kernel Approximation") #Matérn
-plt.plot(t_eval, c_t_ode, color="c", label=r"$\hat{y}(t)$: Shooting method")# Matérn
+plt.plot(t_eval, c_t_ode, color="c", label=r"$\hat{y}(t)$: Shooting Method")# Matérn
 #plt.plot(t, c_benchmark, linestyle="--", color="b", label=r"$y(t)$: Benchmark Solution")
 plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
 
@@ -160,7 +170,13 @@ plt.plot(
     t,
     c_rel_error_matern,
     color="b",
-    label=r"$\varepsilon_y(t)$: Reletaive Errors for $y(t)$",
+    label=r"$\varepsilon_y(t)$: Kernel Method",
+)
+plt.plot(
+    t,
+    c_ode_rel_error,
+    color="c",
+    label=r"$\varepsilon_y(t)$: Shooting Method",
 )
 
 plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
@@ -168,3 +184,5 @@ plt.yscale("log")  # Set y-scale to logarithmic
 plt.ylim(c_rel_error_ylim[0], c_rel_error_ylim[1])
 plt.xlabel("Time")
 plt.legend()  # Show legend with labels
+
+plt.savefig(output_path, format="pdf")
