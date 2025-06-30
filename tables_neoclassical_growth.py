@@ -16,7 +16,7 @@ sols = [sol_default, sol_nu_1_5, sol_nu_2_5, sol_rho_2, sol_rho_20]
 df = pd.DataFrame(
     {
         r"$\nu$": [r"$1/2$", r"$3/2$", r"$5/2$", r"$1/2$", r"$1/2$"],
-        r"$\rho$": [10, 10, 10, 2, 20],
+        r"$\ell$": [10, 10, 10, 2, 20],
         r"Max of Rel. Error: $\hat{x}(t)$": [
             sol["k_rel_error"].max().item() for sol in sols
         ],
