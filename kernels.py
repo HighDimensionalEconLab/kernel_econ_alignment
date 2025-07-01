@@ -3,7 +3,8 @@ import jax.numpy as jnp
 from quadax import quadgk
 from functools import partial
 
-
+# Defininig the kernels
+#------------------------------------------------------------------
 # jit compatible for kernels
 def matern_kernel_0p5(t_i, t_j, sigma, rho):
     d = jnp.abs(t_i - t_j)
@@ -22,7 +23,14 @@ def matern_kernel_2p5(t_i, t_j, sigma, rho):
     term = (5 * d**2) / (3 * rho**2)
     return sigma**2 * (1 + exponent + term) * jnp.exp(-exponent)
 
+def matern_kernel_inf(t_i,t_j, sigma, rho): # limit of matern kernel as $\nu$ -> \infty 
+    d = jnp.abs(t_i - t_j)
+    exponent = - (1/2)*(d**2/rho**2) 
+    return (sigma**2)*jnp.exp(exponent)
 
+
+# Defining the integrals of the kernels
+#---------------------------------------------------------------------------
 def integrated_matern_kernel_0p5(t_i, t_j, sigma, rho):
     s = t_i - t_j
     d = jnp.abs(s)
@@ -55,6 +63,16 @@ def integrated_matern_kernel_2p5(t_i, t_j, sigma, rho, quad_tol=1e-7):
     )
     return jnp.where(t_i == 0, 0, integral)
 
+def integrated_matern_kernel_inf(t_i, t_j, sigma, rho, quad_tol=1e-7):
+    def matern_integrand(t):
+        return matern_kernel_inf(t, t_j, sigma, rho)
+
+    integral, info = quadgk(
+        matern_integrand, [0, t_i], epsabs=quad_tol, epsrel=quad_tol
+    )
+    return jnp.where(t_i == 0, 0, integral)
+
+#--------------------------------------------------------------------------------
 
 # Cannot jit the 'if' unless a static argument.  jax.lax.switch tricky to use
 @partial(jax.jit, static_argnums=(2,))
@@ -89,6 +107,16 @@ def integrated_matern_kernel_matrices(t_i, t_j, nu, sigma, rho):
             in_axes=(0, None, None, None),
         )(t_i, t_j, sigma, rho)
         return K, K_tilde
+    elif nu == "inf":
+        K = jax.vmap(
+            jax.vmap(matern_kernel_inf, in_axes=(None, 0, None, None)),
+            in_axes=(0, None, None, None),
+        )(t_i, t_j, sigma, rho)
+        K_tilde = jax.vmap(
+            jax.vmap(integrated_matern_kernel_inf, in_axes=(None, 0, None, None)),
+            in_axes=(0, None, None, None),
+        )(t_i, t_j, sigma, rho)
+        return K, K_tilde
     else:
         print("nu not supported")
         return jnp.full((t_i.shape[0], t_j.shape[0]), jnp.nan), jnp.full(
@@ -111,7 +139,7 @@ def make_safe_at_equality(func):
 
     return safe_func
 
-
+# The final output
 @partial(jax.jit, static_argnums=(2,))
 def differentiated_matern_kernel_matrices(t_i, t_j, nu, sigma, rho):
     if nu == 0.5:
