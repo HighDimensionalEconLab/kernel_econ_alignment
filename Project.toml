@@ -1,0 +1,17 @@
+name = "KernelEconExamples"
+uuid = "9d687d3a-22d1-4cc8-8dc9-bb15139a4de0"
+authors = ["Jesse Perla <jesseperla@gmail.com> and contributors"]
+version = "1.0.0-DEV"
+
+[deps]
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+
+[compat]
+Distributions = "0.25.120"
+julia = "1.11"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
