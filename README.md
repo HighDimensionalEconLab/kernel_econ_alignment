@@ -3,9 +3,9 @@
 ## Setup
   Use [uv](https://github.com/astral-sh/uv#installation) to install `uv`. Then install the required packages with:
     
-    ```bash
+  ```bash
     uv sync
-    ```
+  ```
   - Finally, in VS Code you can activate the default environment with `>Python: Select Interpreter` to be the `.venv` local to the directory 
   - If the debugger isn't working in that case, sometimes setting the vscode `terminal.integrated.shellIntegration.enabled: true` in the settings can help
   - Outside of vscode, you will need to [activate .venv](https://docs.python.org/3/tutorial/venv.html#creating-virtual-environments) in your terminal 
