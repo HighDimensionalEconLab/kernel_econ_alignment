@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-from new_optimal_advertising_matern import (
+from optimal_advertising_matern import (
     optimal_advertising_matern,
 )
 

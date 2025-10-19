@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from neoclassical_growth_benchmark import neoclassical_growth_benchmark
-from new_neoclassical_growth_matern import neoclassical_growth_matern
+from neoclassical_growth_matern import neoclassical_growth_matern
 
 from mpl_toolkits.axes_grid1.inset_locator import (
     zoomed_inset_axes,

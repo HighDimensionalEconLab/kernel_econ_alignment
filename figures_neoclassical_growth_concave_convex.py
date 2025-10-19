@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-from new_neoclassical_growth_concave_convex_matern  import neoclassical_growth_concave_convex_matern
+from neoclassical_growth_concave_convex_matern  import neoclassical_growth_concave_convex_matern
 
 from mpl_toolkits.axes_grid1.inset_locator import (
     zoomed_inset_axes,
