@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import os
-from new_asset_pricing_matern import asset_pricing_matern
+from asset_pricing_matern import asset_pricing_matern
 
 from mpl_toolkits.axes_grid1.inset_locator import (
     zoomed_inset_axes,

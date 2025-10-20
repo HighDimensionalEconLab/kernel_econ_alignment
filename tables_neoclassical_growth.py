@@ -1,6 +1,6 @@
 import pandas as pd
 
-from new_neoclassical_growth_matern import neoclassical_growth_matern
+from neoclassical_growth_matern import neoclassical_growth_matern
 
 sol_default = neoclassical_growth_matern()
 sol_nu_1_5 = neoclassical_growth_matern(nu=1.5)

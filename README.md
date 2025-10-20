@@ -1,18 +1,14 @@
 # kernel_econ_alignment
 
 ## Setup
-```bash
-conda create -n kernels python=3.11
-conda activate kernels
-pip install -r requirements.txt
-conda install -c conda-forge ipopt=3.11.1
-```
-
-If you have trouble with that, try `conda install -c conda-forge ipopt=3.11.1`
-
-- Then you will need to activate it with `conda activate kernels`.
-- Then when using vscode, consider `>Python: Select Interpreter` to select the `kernels` environment.
-- If the debugger isn't working in that case, sometimes setting the vscode `terminal.integrated.shellIntegration.enabled: true` in the settings can help
+  Use [uv](https://github.com/astral-sh/uv#installation) to install `uv`. Then install the required packages with:
+    
+  ```bash
+    uv sync
+  ```
+  - Finally, in VS Code you can activate the default environment with `>Python: Select Interpreter` to be the `.venv` local to the directory 
+  - If the debugger isn't working in that case, sometimes setting the vscode `terminal.integrated.shellIntegration.enabled: true` in the settings can help
+  - Outside of vscode, you will need to [activate .venv](https://docs.python.org/3/tutorial/venv.html#creating-virtual-environments) in your terminal 
 
 ## Example Usage
 The individual files support CLI arguments.  To pick specific points rather than the linspace grid, pass in `--train_points_list` as below

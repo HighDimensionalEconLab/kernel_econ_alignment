@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import os
-from new_neoclassical_human_capital_matern import human_capital_matern
+from neoclassical_human_capital_matern import human_capital_matern
 
 from mpl_toolkits.axes_grid1.inset_locator import (
     zoomed_inset_axes,
