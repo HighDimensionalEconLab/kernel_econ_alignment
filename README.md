@@ -1,14 +1,21 @@
 # kernel_econ_alignment
 
-## Setup
-  Use [uv](https://github.com/astral-sh/uv#installation) to install `uv`. Then install the required packages with:
-    
-  ```bash
-    uv sync
-  ```
-  - Finally, in VS Code you can activate the default environment with `>Python: Select Interpreter` to be the `.venv` local to the directory 
-  - If the debugger isn't working in that case, sometimes setting the vscode `terminal.integrated.shellIntegration.enabled: true` in the settings can help
-  - Outside of vscode, you will need to [activate .venv](https://docs.python.org/3/tutorial/venv.html#creating-virtual-environments) in your terminal 
+## Setup with uv
+`uv` is a much faster alternative to conda, but is sometimes more challenging for binary dependencies.  To use it here,
+
+1. Install [uv](https://github.com/astral-sh/uv#installation) to install `uv`.  Summary:
+  - On linux/macos: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+  - On windows: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+2. Install optimizer dependencies.  On linux/macos with homebrew run
+  - On macos: `brew install ipopt pkg-config`, linux likely: `sudo apt-get install coinor-libipopt-dev pkg-config`
+  - Windows: `conda install -c conda-forge ipopt pkg-config`  This will only use conda for the binaries.  Make sure not to run it in a conda environment?
+3. Synchronize the environment
+```bash
+  uv sync
+```
+- Finally, in VS Code you can activate the default environment with `>Python: Select Interpreter` to be the `.venv` local to the directory 
+- If the debugger isn't working in that case, sometimes setting the vscode `terminal.integrated.shellIntegration.enabled: true` in the settings can help
+- Outside of vscode, you will need to [activate .venv](https://docs.python.org/3/tutorial/venv.html#creating-virtual-environments) in your terminal 
 
 ## Example Usage
 The individual files support CLI arguments.  To pick specific points rather than the linspace grid, pass in `--train_points_list` as below
