@@ -39,6 +39,15 @@ conda install -n base -c conda-forge ipopt=3.11.1 pkg-config
 - If you receive JAX errors about DLL load failures, you may need to update [https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170#visual-studio-2015-2017-2019-and-2022](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170#visual-studio-2015-2017-2019-and-2022)
 - See notes above on Windows Ipopt installation challenges
 
+## Figure Replication
+After installation, to generate all of the figures in the paper and the appendices,
+
+```bash
+python all_figures.py
+```
+
+The output will be in the `./figures` folder
+
 ## Example Usage
 The individual files support CLI arguments.  To pick specific points rather than the linspace grid, pass in `--train_points_list` as below
 
