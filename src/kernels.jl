@@ -57,3 +57,9 @@ function integrated_matern_kernel_inf(t_i, t_j; sigma, rho)
     integral, info = QuadGK.quadgk(matern_integrand, 0.0, t_i)
     return ifelse(iszero(t_i), zero(integral), integral)
 end
+
+function matrices_matern_kernel_0p5(t, s; sigma, rho)
+    K = [matern_kernel_0p5(t[i], s[j]; sigma, rho) for i in 1:length(t), j in 1:length(s)]
+    K_tilde = [integrated_matern_kernel_0p5(t[i], s[j]; sigma, rho) for i in 1:length(t), j in 1:length(s)]
+    return K, K_tilde
+end

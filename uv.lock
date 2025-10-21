@@ -202,6 +202,33 @@ wheels = [
 ]
 
 [[package]]
+name = "kernel-econ-alignment"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "cyipopt" },
+    { name = "jax" },
+    { name = "jinja2" },
+    { name = "jsonargparse" },
+    { name = "matplotlib" },
+    { name = "pandas" },
+    { name = "pyomo" },
+    { name = "quadax" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cyipopt", specifier = ">=1.6.1" },
+    { name = "jax", specifier = ">=0.7.2" },
+    { name = "jinja2", specifier = ">=3.1.6" },
+    { name = "jsonargparse", specifier = ">=4.41.0" },
+    { name = "matplotlib", specifier = ">=3.10.6" },
+    { name = "pandas", specifier = ">=2.3.2" },
+    { name = "pyomo", specifier = ">=6.9.4" },
+    { name = "quadax", specifier = ">=0.2.9" },
+]
+
+[[package]]
 name = "kiwisolver"
 version = "1.4.9"
 source = { registry = "https://pypi.org/simple" }
@@ -676,33 +703,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/95/32/1a225d6164441be760d75c2c42e2780dc0873fe382da3e98a2e1e48361e5/tzdata-2025.2.tar.gz", hash = "sha256:b60a638fcc0daffadf82fe0f57e53d06bdec2f36c4df66280ae79bce6bd6f2b9", size = 196380, upload-time = "2025-03-23T13:54:43.652Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5c/23/c7abc0ca0a1526a0774eca151daeb8de62ec457e77262b66b359c3c7679e/tzdata-2025.2-py2.py3-none-any.whl", hash = "sha256:1a403fada01ff9221ca8044d701868fa132215d84beb92242d9acd2147f667a8", size = 347839, upload-time = "2025-03-23T13:54:41.845Z" },
-]
-
-[[package]]
-name = "uv-update"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "cyipopt" },
-    { name = "jax" },
-    { name = "jinja2" },
-    { name = "jsonargparse" },
-    { name = "matplotlib" },
-    { name = "pandas" },
-    { name = "pyomo" },
-    { name = "quadax" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "cyipopt", specifier = ">=1.6.1" },
-    { name = "jax", specifier = ">=0.7.2" },
-    { name = "jinja2", specifier = ">=3.1.6" },
-    { name = "jsonargparse", specifier = ">=4.41.0" },
-    { name = "matplotlib", specifier = ">=3.10.6" },
-    { name = "pandas", specifier = ">=2.3.2" },
-    { name = "pyomo", specifier = ">=6.9.4" },
-    { name = "quadax", specifier = ">=0.2.9" },
 ]
 
 [[package]]
