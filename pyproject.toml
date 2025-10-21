@@ -1,7 +1,7 @@
 [project]
-name = "uv-update"
+name = "kernel_econ_alignment"
 version = "0.1.0"
-description = "Add your description here"
+description = "Replication Code for Solving Models of Economic Dynamics with Ridgeless Kernel Regressions"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
