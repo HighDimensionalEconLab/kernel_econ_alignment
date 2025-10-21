@@ -1,10 +1,10 @@
 # Solving Models of Economic Dynamics with Ridgeless Kernel Regressions
-This repository contains the replication code and extra examples for ["Solving Models of Economic Dynamics with Ridgeless Kernel Regressions"](hhttps://arxiv.org/pdf/2406.01898) by Mahdi Ebrahimi Kahou, Jesse Perla, and Geoff Pleiss
+This repository contains the replication code and extra examples for [Solving Models of Economic Dynamics with Ridgeless Kernel Regressions](https://arxiv.org/pdf/2406.01898) by Mahdi Ebrahimi Kahou, Jesse Perla, and Geoff Pleiss
 
 Full replication code is provided for Python, and additional Julia code is in progress.
 
 # Python Setup
-We recommend installation with `uv` (recommended, especially on MacOS and Linux).  If you wish to use `conda` see notes at the end of these instructions.
+We recommend installation with `uv` (on all platforms, but especially on MacOS and Linux).  If you wish to use `conda` see notes at the end of these instructions.
 
 ## Windows Ipopt Installation
 Ipopt binary installation is tricky, and we find the most reliable method is to use Anaconda (even if you will otherwise use `uv`).  To do so, install ipopt in your base Anaconda with
@@ -12,14 +12,14 @@ Ipopt binary installation is tricky, and we find the most reliable method is to 
 ```bash
 conda install -n base -c conda-forge ipopt=3.11.1 pkg-config
 ```
-  - For Windows, that precise version seems to be essential.
+  - For Windows, version `3.11.1` seems to be essential.
   - If you have clutter in your base Anaconda which prevents this from correctly installing, then you may need to reinstall Anaconda.
   - If you run into issues the binary dependencies in Julia are bullet-proof and seamless.
 
 ## Setup with uv
 `uv` is a much faster alternative to Conda, even if it has incomplete support for challenging binary dependencies.
 
-1. Install [uv](https://github.com/astral-sh/uv#installation) to install `uv`. This is a one-line installation:
+1. Install [uv](https://github.com/astral-sh/uv#installation). This is a one-line installation:
      - On linux/MacOS: `curl -LsSf https://astral.sh/uv/install.sh | sh`
      - On Windows: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
 2. Install optimizer dependencies.
