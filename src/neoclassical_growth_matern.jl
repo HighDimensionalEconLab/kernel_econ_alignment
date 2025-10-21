@@ -1,6 +1,28 @@
 using JuMP
 using Ipopt
 using Statistics
+# JuMP nonlinear optimization is incomplete
+
+# Broadcasted code for nonlinear constraints doesn't work well with JuMPs nonlinear auto-diff implementation
+# Objective: minimize alpha' * K * alpha 
+# @objective(model, Min, 
+#     alpha_mu' * K * alpha_mu + 
+#     alpha_k' * K * alpha_k + 
+
+# mu = mu_0 .+ K_tilde * alpha_mu
+# c = c_0 .+ K_tilde * alpha_c
+# k = k_0 .+ K_tilde * alpha_k
+# dmu_dt = K * alpha_mu
+# dk_dt = K * alpha_k
+
+# # Resource constraint: dk/dt = k^a - delta*k - c
+# @constraint(model, dk_dt .== k.^a .- delta .* k .- c)
+
+# # Euler equation: dmu/dt = -mu * (a*k^(a-1) - delta - rho_hat)
+# @constraint(model, dmu_dt .== -mu .* (a .* k.^(a-1) .- delta .- rho_hat))
+
+# # Shadow price: mu * c = 1
+# @constraint(model, mu .* c .== 1.0)       
 
 function neoclassical_growth_matern(;
     a=1/3,
@@ -15,7 +37,6 @@ function neoclassical_growth_matern(;
     test_T=50.0,
     test_points=100,
     baseline_T=60.0,
-    baseline_points=300,
     lambda_p=0.0,
     verbose=false,
     tol=1e-8,
@@ -26,10 +47,10 @@ function neoclassical_growth_matern(;
     # Setup training and test data
     train_data = range(0, train_T, length=train_points)
     test_data = range(0, test_T, length=test_points)
-    baseline_grid = range(0, baseline_T, length=baseline_points)
     
     # Construct kernel matrices using nu=0.5
     K, K_tilde = matrices_matern_kernel_0p5(train_data, train_data; sigma, rho)
+    K = Symmetric((K + K')/2) # symmetric since train_data both arguments. K_tilde not symmetric
     N = length(train_data)
     
     # Create JuMP model with Ipopt (non-convex problem)
@@ -47,31 +68,38 @@ function neoclassical_growth_matern(;
     @variable(model, alpha_k[1:N])
     @variable(model, c_0 >= 0, start = k_0^a - delta * k_0)
     @variable(model, mu_0 >= 0, start = k_0^a - delta * k_0)
+
+    @objective(model, Min,
+        dot(alpha_mu, K * alpha_mu) +
+        dot(alpha_k,  K * alpha_k)
+    )    
+
+    # Building blocks to preserve sparsity in JuMP's nonlinear model
+    # Create auxiliary variables for linear transformations of alpha coefficients
+    @variable(model, dk_dt[1:N])      # dk_dt = K * alpha_k (derivative via kernel)
+    @variable(model, dmu_dt[1:N])     # dmu_dt = K * alpha_mu (derivative via kernel)
+    @variable(model, k_tilde[1:N])    # k_tilde = K_tilde * alpha_k (integrated kernel)
+    @variable(model, mu_tilde[1:N])   # mu_tilde = K_tilde * alpha_mu (integrated kernel)
+    @variable(model, c_tilde[1:N])    # c_tilde = K_tilde * alpha_c (integrated kernel)
     
-    # Objective: minimize alpha' * K * alpha with smoothing penalty
-    @objective(model, Min, 
-        alpha_mu' * K * alpha_mu + 
-        alpha_k' * K * alpha_k + 
-        lambda_p * (alpha_c' * K * alpha_c + 
-                    alpha_k' * K * alpha_k + 
-                    alpha_mu' * K * alpha_mu))
-    
-    # Constraints using broadcasting
-    mu = mu_0 .+ K_tilde * alpha_mu
-    c = c_0 .+ K_tilde * alpha_c
-    k = k_0 .+ K_tilde * alpha_k
-    dmu_dt = K * alpha_mu
-    dk_dt = K * alpha_k
-    
-    # Resource constraint: dk/dt = k^a - delta*k - c
-    @constraint(model, dk_dt .== k.^a .- delta .* k .- c)
-    
-    # Euler equation: dmu/dt = -mu * (a*k^(a-1) - delta - rho_hat)
-    @constraint(model, dmu_dt .== -mu .* (a .* k.^(a-1) .- delta .- rho_hat))
-    
-    # Shadow price: mu * c = 1
-    @constraint(model, mu .* c .== 1.0)
-    
+    # Linear equality constraints define these auxiliary variables
+    @constraint(model, dk_dt .== K * alpha_k)
+    @constraint(model, dmu_dt .== K * alpha_mu)
+    @constraint(model, k_tilde .== K_tilde * alpha_k)
+    @constraint(model, mu_tilde .== K_tilde * alpha_mu)
+    @constraint(model, c_tilde .== K_tilde * alpha_c)
+
+    # Nonlinear expressions for state and control variables
+    @NLexpression(model, mu[i=1:N], mu_0 + mu_tilde[i])
+    @NLexpression(model, c[i=1:N],  c_0 + c_tilde[i])
+    @NLexpression(model, k[i=1:N],  k_0 + k_tilde[i])
+
+    # System constraints (resource, Euler, shadow price)
+    @NLconstraint(model, [i=1:N], dk_dt[i] == k[i]^a - delta * k[i] - c[i])
+    @NLconstraint(model, [i=1:N], dmu_dt[i] == -mu[i] * (a * k[i]^(a-1) - delta - rho_hat))
+    @NLconstraint(model, [i=1:N], mu[i] * c[i] == 1.0)
+
+    println("Solving Neoclassical Growth Matern with N=$N")
     optimize!(model)
     
     alpha_c_val = value.(alpha_c)

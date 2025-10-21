@@ -24,6 +24,7 @@ function asset_pricing_matern(;
     
     # Construct kernel matrices using nu=0.5
     K, K_tilde = matrices_matern_kernel_0p5(train_data, train_data; sigma, rho)
+    K = Symmetric((K + K')/2) 
     N = length(train_data)
     
     # x(t) solution
@@ -43,8 +44,8 @@ function asset_pricing_matern(;
     @variable(model, alpha_mu[1:N])
     @variable(model, mu_0 >= 0)
     
-    # Objective: minimize alpha' * K * alpha
-    @objective(model, Min, alpha_mu' * K * alpha_mu)
+    # Objective: minimize alpha' * K * alpha (using dot for symmetric K)
+    @objective(model, Min, dot(alpha_mu, K * alpha_mu))
     
     # Constraints: dp/dt = r*p - x(t)
     # where p(t) = mu_0 + K_tilde * alpha and dp/dt = K * alpha

@@ -18,9 +18,8 @@ using Statistics
             test_T=50.0,
             test_points=100,
             baseline_T=60.0,
-            baseline_points=300,
             lambda_p=0.0,
-            verbose=false
+            verbose=true
         )
         
         # Test c_0 value (relaxed due to solver differences)
