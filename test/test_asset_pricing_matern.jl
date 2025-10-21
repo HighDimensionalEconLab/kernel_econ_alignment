@@ -1,5 +1,6 @@
 using KernelEconExamples
 using Test
+using Statistics
 
 @testset "Asset Pricing Matern" begin
     @testset "Exact Python Defaults" begin
@@ -24,7 +25,7 @@ using Test
         @test result.p_0 ≈ 0.699497563627038 atol=1e-10
         
         # Verify mean relative error matches Python: ~0.00015457791718911825
-        @test sum(result.p_rel_error) / length(result.p_rel_error) < 0.0002
+        @test mean(result.p_rel_error) < 0.0002
         
         # Check p_test values match Python output
         # Python: [0.69949756 0.72836592 0.75446368 0.7780531  0.79937546]
@@ -79,7 +80,7 @@ using Test
         @test all(isfinite.(result.p_benchmark))
         
         # Solution should be reasonably accurate (relaxed tolerance for sparser grid)
-        @test sum(result.p_rel_error) / length(result.p_rel_error) < 0.25
+        @test mean(result.p_rel_error) < 0.25
     end
     
     @testset "Kernel Solution Interpolator" begin

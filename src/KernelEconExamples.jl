@@ -1,7 +1,7 @@
 module KernelEconExamples
 using Distributions, QuadGK
 using DifferentialEquations, BoundaryValueDiffEq
-using JuMP, Ipopt
+using JuMP, OSQP
 
 include("kernels.jl")
 include("neoclassical_growth_baseline.jl")
