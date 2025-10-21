@@ -63,12 +63,12 @@ function asset_pricing_matern(;
     end
     
     # Evaluate on test data
-    p_benchmark = asset_pricing_baseline(test_data, c, g, r, x_0)
+    p_baseline = asset_pricing_baseline(test_data, c, g, r, x_0)
     p_test = kernel_solution(test_data)
-    p_rel_error = abs.(p_benchmark .- p_test) ./ p_benchmark
+    p_rel_error = abs.(p_baseline .- p_test) ./ p_baseline
     
     println("solve_time(s) = $solve_time_sec, E(|rel_error(p)|) = $(mean(p_rel_error))")
     
-    return (; t_train=train_data, t_test=test_data, p_test, p_benchmark, p_rel_error, 
+    return (; t_train=train_data, t_test=test_data, p_test, p_baseline, p_rel_error, 
               alpha, p_0, solve_time=solve_time_sec, kernel_solution)
 end

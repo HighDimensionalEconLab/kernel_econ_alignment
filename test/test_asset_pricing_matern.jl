@@ -52,7 +52,7 @@ using Statistics
         @test result.p_0 >= 0
         @test all(isfinite.(result.alpha))
         @test all(isfinite.(result.p_test))
-        @test all(isfinite.(result.p_benchmark))
+        @test all(isfinite.(result.p_baseline))
     end
     
     @testset "Different Parameters" begin
@@ -77,7 +77,7 @@ using Statistics
         @test length(result.t_train) == 11
         @test length(result.t_test) == 50
         @test all(isfinite.(result.p_test))
-        @test all(isfinite.(result.p_benchmark))
+        @test all(isfinite.(result.p_baseline))
         
         # Solution should be reasonably accurate (relaxed tolerance for sparser grid)
         @test mean(result.p_rel_error) < 0.25
