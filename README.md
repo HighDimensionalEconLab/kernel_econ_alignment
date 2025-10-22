@@ -21,7 +21,7 @@ conda install -n base -c conda-forge ipopt=3.11.1 pkg-config
 
 1. Install [uv](https://github.com/astral-sh/uv#installation). This is a usually a one-line installation:
      - On Linux/MacOS: `curl -LsSf https://astral.sh/uv/install.sh | sh`
-     - On Windows: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+     - On Windows: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"` or with winget `winget install --id=astral-sh.uv  -e`
      - If you have any installation issues, [see the docs](https://docs.astral.sh/uv/getting-started/installation/) for troubleshooting
 2. Install optimizer dependencies.
      - On MacOS: `brew install ipopt pkg-config`
