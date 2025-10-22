@@ -19,13 +19,14 @@ conda install -n base -c conda-forge ipopt=3.11.1 pkg-config
 ## Setup with uv
 `uv` is a much faster alternative to Conda, even if it has incomplete support for challenging binary dependencies.
 
-1. Install [uv](https://github.com/astral-sh/uv#installation). This is a one-line installation:
-     - On linux/MacOS: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+1. Install [uv](https://github.com/astral-sh/uv#installation). This is a usually a one-line installation:
+     - On Linux/MacOS: `curl -LsSf https://astral.sh/uv/install.sh | sh`
      - On Windows: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+     - If you have any installation issues, [see the docs](https://docs.astral.sh/uv/getting-started/installation/) for troubleshooting
 2. Install optimizer dependencies.
      - On MacOS: `brew install ipopt pkg-config`
      - Linux: `sudo apt-get install coinor-libipopt-dev pkg-config`
-     - Windows: See note above if you have no previously installed Ipopt or JAX
+     - Windows: See note above if you have not previously installed Ipopt or JAX
 3. Synchronize the environment
 ```bash
   uv sync
