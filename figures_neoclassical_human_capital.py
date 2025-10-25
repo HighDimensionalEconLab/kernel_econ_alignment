@@ -92,7 +92,7 @@ ax_investment_mu_k = plt.subplot(4, 2, 6)
 plt.plot(t, mu_k_hat, color="grey", label=r"$\hat{\mu}_k(t)$: Kernel Approximation")
 #plt.axhline(y=sol["i_h_ss"], linestyle="-.", color="grey", label=r"$i_h^*$: Steady-State")
 plt.axvline(x=T, color="grey", linestyle=":", label="Extrapolation/Interpolation")
-plt.ylabel("Co-state Variable: $\mu_k(t)$")
+plt.ylabel(r"Co-state Variable: $\mu_k(t)$")
 plt.xlabel("Time")
 plt.legend()  # Show legend with labels
 
@@ -101,7 +101,7 @@ ax_investment_mu_h = plt.subplot(4, 2, 7)
 plt.plot(t, mu_h_hat, color="grey", label=r"$\hat{\mu}_h(t)$: Kernel Approximation")
 #plt.axhline(y=sol["i_h_ss"], linestyle="-.", color="grey", label=r"$i_h^*$: Steady-State")
 plt.axvline(x=T, color="grey", linestyle=":", label="Extrapolation/Interpolation")
-plt.ylabel("Co-state Variable: $\mu_h(t)$")
+plt.ylabel(r"Co-state Variable: $\mu_h(t)$")
 plt.xlabel("Time")
 plt.legend()  # Show legend with labels
 
