@@ -32,7 +32,7 @@ def human_capital_matern(
     benchmark_T: float = 60.0,
     benchmark_points: int = 300,
     train_points_list: Optional[List[float]] = None,
-    lambda_p: float = 1e-6,  # small smoothing penalty to stabilize IPOPT
+    lambda_p: float = 1.0,  # small smoothing penalty to stabilize IPOPT
     verbose: bool = False,
 ):
     # if passing in `train_points` then doesn't us a grid.  Otherwise, uses linspace
