@@ -27,25 +27,25 @@ end
 
 @testset "integrated_matern_kernel_0p5" begin
     @test integrated_matern_kernel_0p5(25.0, 25.0; sigma = 1.0, rho = 15.0) ≈ 12.166864 rtol=1e-5
-    @test integrated_matern_kernel_0p5(1.0, 50.0; sigma = 1.0, rho = 15.0) ≈ 0.03688982 rtol=1e-5
+    @test integrated_matern_kernel_0p5(0.0, 50.0; sigma = 1.0, rho = 15.0) ≈ 0.0 
     @test integrated_matern_kernel_0p5(1.0, 40.0; sigma = 1.5, rho = 11.0) ≈ 0.06206109 rtol=1e-5
 end
 
 @testset "integrated_matern_kernel_1p5" begin
     @test integrated_matern_kernel_1p5(25.0, 25.0; sigma = 1.0, rho = 15.0) ≈ 14.96084 rtol=1e-5
-    @test integrated_matern_kernel_1p5(1.0, 50.0; sigma = 1.0, rho = 15.0) ≈ 0.02212782 rtol=1e-6
+    @test integrated_matern_kernel_1p5(0.0, 50.0; sigma = 1.0, rho = 15.0) ≈ 0.0 
     @test integrated_matern_kernel_1p5(1.0, 40.0; sigma = 1.5, rho = 11.0) ≈ 0.03234953 rtol=1e-6
 end
 
 @testset "integrated_matern_kernel_2p5" begin
     @test integrated_matern_kernel_2p5(25.0, 25.0; sigma = 1.0, rho = 15.0) ≈ 15.7074995 rtol=1e-5
-    @test integrated_matern_kernel_2p5(1.0, 50.0; sigma = 1.0, rho = 15.0) ≈ 0.01656854 rtol=1e-6
+    @test integrated_matern_kernel_2p5(0.0, 50.0; sigma = 1.0, rho = 15.0) ≈ 0.0 
     @test integrated_matern_kernel_2p5(1.0, 40.0; sigma = 1.5, rho = 11.0) ≈ 0.02238993 rtol=1e-6
 end
 
 @testset "integrated_matern_kernel_inf" begin
     @test integrated_matern_kernel_inf(25.0, 25.0; sigma = 1.0, rho = 15.0) ≈ 17.002823 rtol=1e-5
-    @test integrated_matern_kernel_inf(1.0, 50.0; sigma = 1.0, rho = 15.0) ≈ 0.00432575 rtol=1e-5
+    @test integrated_matern_kernel_inf(0.0, 50.0; sigma = 1.0, rho = 15.0) ≈ 0.0 
     @test integrated_matern_kernel_inf(1.0, 40.0; sigma = 1.5, rho = 11.0) ≈ 0.00358036 rtol=1e-5
 end
 
