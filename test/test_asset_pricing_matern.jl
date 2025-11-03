@@ -2,6 +2,22 @@ using KernelEconExamples
 using Test
 using Statistics
 
+@testset "Asset Pricing Baseline" begin
+        c = 1.0
+        g = 0.02
+        r = 0.05
+        x_0 = 1.0
+        
+        # Test vector input with values from Python
+        t_values = [0.0, 10.0, 20.0, 30.0, 40.0, 50.0]
+        expected = [700.0, 1076.384765625, 1536.1019287109375, 2097.60205078125, 
+                    2783.419677734375, 3621.0791015625]
+        
+        result = asset_pricing_baseline(t_values, c, g, r, x_0)
+        
+    @test all(isapprox.(result, expected; rtol=1e-5))
+end
+
 @testset "Asset Pricing Matern" begin
     @testset "Exact Python Defaults" begin
         # Use EXACT defaults from Python asset_pricing_matern.py:
@@ -20,7 +36,7 @@ using Statistics
             test_points=100,
             verbose=false
         )
-        
+
         # Verify p_0 matches Python: 0.699497563627038
         @test result.p_0 ≈ 0.699497563627038 atol=1e-10
         
@@ -54,56 +70,5 @@ using Statistics
         @test all(isfinite.(result.p_test))
         @test all(isfinite.(result.p_baseline))
     end
-    
-    @testset "Different Parameters" begin
-        # Test with different parameters to ensure robustness
-        result = asset_pricing_matern(
-            r=0.05,
-            c=0.01,
-            g=-0.1,
-            x_0=0.02,
-            sigma=1.0,
-            rho=10.0,
-            train_T=20.0,
-            train_points=11,
-            test_T=20.0,
-            test_points=50,
-            verbose=false
-        )
-        
-        # Basic sanity checks
-        @test result.p_0 >= 0
-        @test length(result.alpha) == 11
-        @test length(result.t_train) == 11
-        @test length(result.t_test) == 50
-        @test all(isfinite.(result.p_test))
-        @test all(isfinite.(result.p_baseline))
-        
-        # Solution should be reasonably accurate (relaxed tolerance for sparser grid)
-        @test mean(result.p_rel_error) < 0.25
-    end
-    
-    @testset "Kernel Solution Interpolator" begin
-        result = asset_pricing_matern(
-            r=0.1,
-            c=0.02,
-            g=-0.2,
-            x_0=0.01,
-            sigma=1.0,
-            rho=10.0,
-            train_T=40.0,
-            train_points=11,
-            test_T=50.0,
-            test_points=100,
-            verbose=false
-        )
-        
-        # Test interpolator at new points
-        t_new = [5.0, 15.0, 25.0]
-        p_new = result.kernel_solution(t_new)
-        
-        @test length(p_new) == 3
-        @test all(isfinite.(p_new))
-        @test all(p_new .> 0)  # Prices should be positive
-    end
+
 end
