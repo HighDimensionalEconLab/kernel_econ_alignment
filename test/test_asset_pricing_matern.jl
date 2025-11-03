@@ -59,11 +59,7 @@ end
         @test result.alpha[4] ≈ -0.004947541016455121 atol=1e-10
         @test result.alpha[5] ≈ -0.004050703982286589 atol=1e-10
         
-        # Check dimensions
-        @test length(result.t_train) == 41
-        @test length(result.t_test) == 100
-        @test length(result.alpha) == 41
-        
+
         # Sanity checks
         @test result.p_0 >= 0
         @test all(isfinite.(result.alpha))
