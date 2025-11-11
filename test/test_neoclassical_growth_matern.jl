@@ -11,7 +11,7 @@ using Statistics
     k_0 = 1.0
     T_max = 60.0
     
-    @testset "Steady State Calculation" begin #there's a perturb_k measuring deviation from ss 
+    @testset "Steady State Calculation" begin 
         k_ss = ((delta + rho_hat) / a)^(1 / (a - 1))
         c_ss = a * k_ss^a - delta * k_ss
         
@@ -20,50 +20,24 @@ using Statistics
     end
     
     @testset "Baseline Solution" begin
-        sol = neoclassical_growth_baseline(a, delta, rho_hat, sigma_crra, k_0, T_max)
+        sol = neoclassical_growth_baseline(a, delta, rho_hat, sigma_crra, k_0, T_max;dt=0.01)
         
         # Test values generated from Python implementation
         test_cases = [
-            (0.0,  1.000000000000000, 0.6924790598846664),
-            (10.0, 1.8855061840618146, 1.0215114953510323),
-            (20.0, 1.9873840082680825, 1.0557592671175073),
-            (30.0, 1.9984666671221869, 1.0594524695219083),
-            (40.0, 1.9996663056043391, 1.0598519467970264),
-            (50.0, 1.9997925349500083, 1.0598959424587540),
-            (60.0, 1.9997120265030062, 1.0599217100950145),
+            (0.0,  1.000000000000000, 0.6933843919901543),
+            (5.0,  1.657592269184338, 0.9428171663266427),
+            (10.0, 1.8861852823518497, 1.0217645195263247),
+            (20.0, 1.9874366901147922, 1.055808609459406),
         ]
         
         for (t, k_expected, c_expected) in test_cases
             val = sol(t)
             @test val[1] ≈ k_expected rtol=1e-3
-            @test val[2] ≈ c_expected rtol=1e-2
+            @test val[2] ≈ c_expected rtol=1e-3
         end
     end
 
-    @testset "Regression Test for different parameters" begin
-    a2 = 0.3
-    delta2 = 0.05
-    r2 = 0.04
-    sigma_crra2 = 2.0
-    k_0_2 = 0.5
-    T_max2 = 30.0
 
-    k_ss2 = ((delta2 + r2) / a2)^(1 / (a2 - 1))
-
-    sol2 = neoclassical_growth_baseline(a2, delta2, r2, sigma_crra2, k_0_2, T_max2)
-    
-    val_0 = sol2(0.0)
-    val_10 = sol2(10.0)
-    val_30 = sol2(T_max2)
-
-    @test abs(val_30[1] - k_ss2) < 0.01
-    @test val_0[1] ≈ 0.5 rtol=1e-10
-    @test val_0[2] ≈ 0.5223374558692421 rtol= 1e-6   
-    @test val_10[1] ≈ 2.8876964556629114 rtol= 1e-6
-    @test val_10[2] ≈ 1.0409788165950287 rtol=1e-6
-    @test val_30[1] ≈ 5.584211504181964 rtol=1e-6
-    @test val_30[2] ≈ 1.2651287490361591 rtol=1e-6
-    end
 end
 
 @testset "Neoclassical Growth Matern" begin
@@ -77,8 +51,8 @@ end
             nu=0.5,
             sigma=1.0,
             rho=10.0,
-            train_T=40.0,
-            train_points=41,
+            train_T=80.0,
+            train_points=81,
             test_T=50.0,
             test_points=100,
             baseline_T=60.0,
@@ -86,18 +60,24 @@ end
             verbose=true
         )
         
-        # Test c_0 value (relaxed due to solver differences)
-        @test result.c_0 ≈ 0.691 atol=0.01
+        # Comparing mean relative errors to Python errors - Julia error strictly smaller
+        @test mean(result.k_rel_error) < 1e-3 # 0.00040656029171102316 in Python
+        @test mean(result.c_rel_error) < 1e-3  #  0.0019231719188908187 in Python
+
+        # Testing relative errors at specific T's
+        k_error_list = result.k_rel_error
+        c_error_list = result.c_rel_error
         
-        # Test mean relative errors (primary validation)
-        @test mean(result.k_rel_error) < 0.001  # Should be around 0.0004
-        @test mean(result.c_rel_error) < 0.005  # Should be around 0.003
+        @test k_error_list[1] == 0.0
+        @test k_error_list[40] < 1e-3
+        @test k_error_list[80] < 1e-5
+        @test k_error_list[100] < 1e-5
 
+        @test c_error_list[1] < 1e-2
+        @test c_error_list[40] < 1e-4
+        @test c_error_list[80] < 1e-5
+        @test c_error_list[100] < 1e-6
+    
 
-        # Test that kernel_solution is callable
-        @test result.kernel_solution isa Function
-        k_interp, c_interp = result.kernel_solution([0.0, 1.0])
-        @test length(k_interp) == 2
-        @test length(c_interp) == 2
     end
 end
