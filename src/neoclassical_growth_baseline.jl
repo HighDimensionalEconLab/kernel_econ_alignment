@@ -1,10 +1,10 @@
 using DifferentialEquations
 using BoundaryValueDiffEq
 
-function neoclassical_growth_baseline(a, delta, r, sigma_crra, k_0, T_max; perturb_k=1e-4, dt=0.1)
+function neoclassical_growth_baseline(a, delta, r, sigma_crra, k_0, T_max;dt=0.001)
     k_ss = ((delta + r) / a)^(1 / (a - 1))
     c_ss = a * k_ss^a - delta * k_ss
-    k_T = k_ss - perturb_k
+
     
     function ode!(dy, y, p, t)
         k, c = y
@@ -14,7 +14,7 @@ function neoclassical_growth_baseline(a, delta, r, sigma_crra, k_0, T_max; pertu
     
     function bc!(residual, y, p, t)
         residual[1] = y[1][1] - k_0
-        residual[2] = y[end][1] - k_T
+        residual[2] = y[end][1] - k_ss
     end
     
     tspan = (0.0, T_max)
