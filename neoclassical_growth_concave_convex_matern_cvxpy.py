@@ -10,24 +10,10 @@ from typing import List, Optional
 
 config.update("jax_enable_x64", True)
 
-# Pyomo-free DNLP port of neoclassical_growth_concave_convex_matern. The
-# concave-convex production is the upper envelope A*max(k**a, b_1*k**a - b_2)
-# (the two branches cross at k_bar), written in pyomo as Expr_if(k < k_bar, ...).
-# cp.maximum is non-smooth, but cvxpy's DNLP rules keep it usable in an L-convex
-# position (convex <= affine): substituting z = k**a makes both branches affine
-# in z, so max(A*z, A*(b_1*z - b_2)) is convex-PWL and may bound an output
-# variable Y from below (cvxpy expands the epigraph into two smooth inequalities).
-# Two complementarity equalities then pin the marginal product P to the active
-# branch and force Y to bind to the envelope -- an exact reformulation, no
-# smoothing.  Where it converges it matches the pyomo solution, but the resulting
-# complementarity (MPCC) collocation is fragile for x_0 in a wide band just above
-# the threshold k_bar (the high-steady-state approach trajectories): there the KKT
-# system is degenerate and neither backend is reliable, so the bistable threshold
-# figure is generated with pyomo instead.  This model defaults to IPOPT (cyipopt)
-# rather than UNO: on those degenerate solves UNO's filterSQP drops into an
-# uninterruptible restoration loop that ignores its iteration budget, whereas
-# IPOPT's interior point respects max_iter and fails fast and cleanly.  UNO stays
-# selectable (it is a touch more accurate when it does converge).
+# Pyomo-free DNLP port of neoclassical_growth_concave_convex_matern.  With z = k**a
+# the concave-convex envelope A*max(k**a, b_1*k**a - b_2) is convex-PWL and bounds
+# output Y from below; two complementarity equalities pin the marginal product P to
+# the active branch and force Y to bind -- an exact reformulation, no smoothing.
 NLP_SOLVERS = {
     "IPOPT": (
         cp.IPOPT,
@@ -48,7 +34,7 @@ def neoclassical_growth_concave_convex_matern_cvxpy(
     nu: float = 0.5,
     sigma: float = 1.0,
     rho: float = 10,
-    solver_type: str = "IPOPT",
+    solver_type: str = "UNO",
     train_T: float = 40.0,
     train_points: int = 41,
     test_T: float = 50,
@@ -74,48 +60,32 @@ def neoclassical_growth_concave_convex_matern_cvxpy(
     K = np.asarray((K + K.T) / 2)  # symmetrize -> exactly PSD for quad_form
     K_tilde = np.asarray(K_tilde)
 
-    # Decision variables.  Consumption is substituted out via c = 1/mu, so the
-    # costate mu and state k are the dynamic unknowns.  z = k**a linearizes the
-    # production branches; Y is output (= the envelope at the optimum); P is the
-    # marginal product of capital carried into the Euler equation.
+    # Consumption is substituted out via c = 1/mu.  z = k**a linearizes the
+    # production branches; Y is output, P the marginal product of capital.  k and
+    # mu carry lower bounds so trial points stay in the domain of k**a and 1/mu.
     alpha_mu, alpha_k = cp.Variable(N), cp.Variable(N)
     mu_0 = cp.Variable(nonneg=True)
     z, Y, P = cp.Variable(N), cp.Variable(N), cp.Variable(N)
+    k, mu = cp.Variable(N), cp.Variable(N)
 
-    # Warm start.  The cold flat init k(t) = k_0 sits at a degenerate stationary
-    # point, so seed k(t) with a crude straight-line ramp toward the steady state
-    # on the correct side of the production threshold k_bar -- all closed-form, no
-    # solve needed.  k_bar is where the branches cross; k_star solves f'(k)=delta+
-    # rho_hat on the active branch.  The ramp only picks the basin; the solver then
-    # converges to the exact branch.  K_tilde is rank-deficient, so pinv gives the
-    # least-norm alpha_k reproducing the ramp approximately (close, not exact).
+    # Flat warm start at k_0 (no ramp toward a steady state): consumption held at
+    # the capital-stationary level, with z, Y, P on the active production branch
+    # (m1 below the kink k_bar, m2 above) so complementarity holds at the start.
     k_bar = (b_2 / (b_1 - 1)) ** (1 / a)
-    if k_0 < k_bar:
-        k_star = ((delta + rho_hat) / (A * a)) ** (1 / (a - 1))
-        c_star = A * k_star**a - delta * k_star
-    else:
-        k_star = ((delta + rho_hat) / (A * a * b_1)) ** (1 / (a - 1))
-        c_star = A * (b_1 * k_star**a - b_2) - delta * k_star
-    k_ramp = k_0 + (k_star - k_0) * (np.asarray(train_data) / float(train_data[-1]))
+    f_0 = A * max(k_0**a, b_1 * k_0**a - b_2)
+    c_0 = f_0 - delta * k_0
+    m1_0 = A * a * k_0 ** (a - 1)
     alpha_mu.value = np.zeros(N)
-    alpha_k.value = np.linalg.pinv(K_tilde) @ (k_ramp - k_0)
-    mu_0.value = 1.0 / c_star
-    z.value = k_ramp**a
-    Y.value = np.maximum(A * z.value, A * (b_1 * z.value - b_2))
-    P.value = A * a * k_ramp ** (a - 1)
+    alpha_k.value = np.zeros(N)
+    mu_0.value = 1.0 / c_0
+    k.value = np.full(N, k_0)
+    mu.value = np.full(N, 1.0 / c_0)
+    z.value = np.full(N, k_0**a)
+    Y.value = np.full(N, f_0)
+    P.value = np.full(N, b_1 * m1_0 if k_0 >= k_bar else m1_0)
 
-    # Affine kernel expansions (the pyomo mu/k/dmu_dt/dk_dt helpers inline).
-    mu = mu_0 + K_tilde @ alpha_mu
-    k = k_0 + K_tilde @ alpha_k
     dmu_dt = K @ alpha_mu
     dk_dt = K @ alpha_k
-
-    # Exact concave-convex production.  With z = k**a the branches are affine, so
-    # max(A*z, A*(b_1*z - b_2)) is convex-PWL and bounds output Y from below (an
-    # L-convex epigraph cvxpy expands into two smooth inequalities).  m1/m2 are the
-    # two branch marginal products; the complementarity equalities pin P to the
-    # active branch and force Y to bind (were Y above both branches, the two
-    # products could not both vanish for a single P).
     m1 = A * a * cp.power(k, a - 1)
     m2 = b_1 * m1
     prob = cp.Problem(
@@ -123,6 +93,9 @@ def neoclassical_growth_concave_convex_matern_cvxpy(
             cp.quad_form(alpha_mu, cp.psd_wrap(K)) + cp.quad_form(alpha_k, cp.psd_wrap(K))
         ),
         [
+            k == k_0 + K_tilde @ alpha_k,  # state/costate from the kernel expansion
+            mu == mu_0 + K_tilde @ alpha_mu,
+            k >= 1e-4, mu >= 1e-4, z >= 1e-6,  # domain bounds
             z == cp.power(k, a),
             cp.maximum(A * z, A * (b_1 * z - b_2)) <= Y,  # production envelope
             cp.multiply(Y - A * z, P - m2) == 0,  # complementarity: pin P, bind Y
@@ -133,6 +106,9 @@ def neoclassical_growth_concave_convex_matern_cvxpy(
     )
     assert prob.is_dnlp()
     solver, options = NLP_SOLVERS[solver_type]
+    options = dict(options)
+    if solver_type == "UNO" and not verbose:
+        options["logger"] = "SILENT"  # mute UNO's C-level iteration table
     start = time.perf_counter()
     prob.solve(nlp=True, solver=solver, verbose=verbose, **options)
     elapsed = time.perf_counter() - start

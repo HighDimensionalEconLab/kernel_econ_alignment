@@ -30,13 +30,10 @@ params = {
 plt.rcParams.update(params)
 
 
-## Plots for concave-convex production function.  implementation selects the
-## solve backend.  This figure defaults to "pyomo": the cvxpy DNLP reformulation
-## is exact where it converges, but the bistable threshold sweep has a wide band
-## of high-steady-state approach trajectories (x_0 just above k_bar) that the
-## complementarity (MPCC) collocation solves only fragilely, so the full 70-curve
-## plot is generated with pyomo.  Pass --implementation cvxpy to use the port.
-def main(implementation: str = "pyomo"):
+## Plots for concave-convex production function.  implementation selects the solve
+## backend and defaults to "cvxpy", the pyomo-free DNLP reformulation solved with
+## UNO.  Pass --implementation pyomo to use the pyomo/ipopt model instead.
+def main(implementation: str = "cvxpy"):
     solve = {
         "cvxpy": neoclassical_growth_concave_convex_matern_cvxpy,
         "pyomo": neoclassical_growth_concave_convex_matern,
@@ -89,15 +86,16 @@ def main(implementation: str = "pyomo"):
 
     #plt.savefig(output_path, format="pdf")
 
-    # Trajectories whose k_0 lands in the thin band between the two basins of
-    # attraction can fail to converge within the solver's iteration budget; skip
-    # those (the threshold plot just loses a couple of its 70 lines).
+    # Sweep x_0 across both basins, skipping any failed or non-physical solve.
     sols = []
     for k_0 in np.linspace(0.5, 4.0, 70):
         try:
-            sols.append(solve(k_0=k_0, train_points=20))
+            sol = solve(k_0=k_0, train_points=20)
         except Exception:
-            pass
+            continue
+        k = np.asarray(sol["k_test"])
+        if np.all(np.isfinite(k)) and k.min() > 0 and k.max() < 10:
+            sols.append(sol)
 
     output_path = "figures/neoclassical_growth_model_concave_convex_threshold.pdf"
 
