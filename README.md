@@ -25,16 +25,29 @@ conda install -n base -c conda-forge ipopt=3.11.1 pkg-config
      - If you have any installation issues, [see the docs](https://docs.astral.sh/uv/getting-started/installation/) for troubleshooting
 2. Install optimizer dependencies.
      - On MacOS: `brew install ipopt pkg-config`
-     - Linux: `sudo apt-get install coinor-libipopt-dev pkg-config`
+     - Linux: `sudo apt-get install coinor-libipopt-dev libblas-dev liblapack-dev pkg-config`
      - Windows: See note above if you have not previously installed Ipopt or JAX
 3. Synchronize the environment
 ```bash
   uv sync
 ```
-4. Finally, you will want to make sure you activate the python environment each time you use it.
+4. **Linux only — obtain the `ipopt` executable.** On Linux the `coinor-libipopt-dev` package provides the Ipopt *library* (needed to build `cyipopt` during `uv sync`) but **not** the `ipopt` command-line executable, which Pyomo's `SolverFactory("ipopt")` invokes to solve the models. The simplest way to get a prebuilt binary is via the IDAES extensions:
+```bash
+  uv run --with idaes-pse idaes get-extensions
+```
+   - This installs `ipopt` (and related solvers) into `~/.idaes/bin`. Add that directory to your `PATH` so Pyomo can find it, e.g. `export PATH="$HOME/.idaes/bin:$PATH"`.
+   - On MacOS (`brew install ipopt`) and Windows (`conda install ... ipopt`) this step is unnecessary because those installs already include the `ipopt` executable.
+5. Finally, you will want to make sure you activate the python environment each time you use it.
    - In VS Code you can activate the default environment with `>Python: Select Interpreter` to be the `.venv` local to the directory
    - If the debugger isn't working in that case, sometimes setting the vscode `terminal.integrated.shellIntegration.enabled: true` in the settings can help
    - Outside of vscode, a simple, platform specific CLI line will [activate .venv](https://docs.python.org/3/tutorial/venv.html#creating-virtual-environments) in your terminal.
+
+## Optimization solvers
+The models use two solver paths:
+
+- **Convex / DCP models** (e.g. asset pricing, `asset_pricing_matern_cvxpy.py`) are solved with [`cvxpy`](https://www.cvxpy.org/) using open-source solvers — **Clarabel, OSQP, SCS, and HiGHS**. These require **no extra setup**: `cvxpy` bundles all four as dependencies, so `uv sync` installs them automatically (HiGHS arrives via `highspy`).
+- **Nonconvex / NLP models** (neoclassical growth, neoclassical human capital, optimal advertising, concave-convex growth — the `*_matern_cvxpy.py` files) are solved through `cvxpy`'s DNLP interface (`prob.solve(nlp=True, ...)`), which hands the smooth nonlinear program to a nonlinear solver. The default is **UNO**, via [`unopy`](https://pypi.org/project/unopy/) — a self-contained binary wheel that statically bundles `libuno`, so `uv sync` installs it with no extra setup. **IPOPT** (via `cyipopt`, also in-process) is selectable; it is the default only for the concave-convex model, whose exact complementarity (MPCC) reformulation UNO can drop into an unbounded restoration loop on. No solver binary on `PATH` is needed for this path. The figure/table scripts take `--implementation cvxpy|pyomo` (default `cvxpy`). The one exception is the concave-convex **threshold** figure, which defaults to `pyomo`: the cvxpy reformulation is exact where it converges but fragile for the band of high-steady-state-approach trajectories just above the threshold, so the full sweep is drawn with pyomo.
+- **Pyomo path (alternative).** The same nonconvex models also ship a `pyomo` implementation (e.g. `neoclassical_growth_matern.py`, selected with `--implementation pyomo`) that drives the `ipopt` *binary* on `PATH` — see step 4 above (the IDAES `ipopt` executable on Linux; `brew`/`conda` on MacOS/Windows). UNO is used only through `cvxpy` (the `unopy` wheel above), so no standalone solver binary needs to be installed for it.
 
 **Troubleshooting**:
 - If you receive JAX errors about DLL load failures, you may need to update [https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170#visual-studio-2015-2017-2019-and-2022](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170#visual-studio-2015-2017-2019-and-2022)
