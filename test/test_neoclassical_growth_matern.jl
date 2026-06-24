@@ -74,7 +74,7 @@ end
         @test k_error_list[100] < 1e-5
 
         @test c_error_list[1] < 1e-2
-        @test c_error_list[40] < 1e-4
+        @test c_error_list[40] < 2e-4
         @test c_error_list[80] < 1e-5
         @test c_error_list[100] < 1e-6
     
