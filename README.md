@@ -1,103 +1,73 @@
 # Solving Models of Economic Dynamics with Ridgeless Kernel Regressions
-This repository contains the replication code and extra examples for [Solving Models of Economic Dynamics with Ridgeless Kernel Regressions](https://arxiv.org/pdf/2406.01898) by Mahdi Ebrahimi Kahou, Jesse Perla, and Geoff Pleiss
 
-Full replication code is provided for Python, and additional Julia code is in progress.
+This repository contains replication code and extra Python examples for
+[Solving Models of Economic Dynamics with Ridgeless Kernel Regressions](https://arxiv.org/pdf/2406.01898)
+by Mahdi Ebrahimi Kahou, Jesse Perla, and Geoff Pleiss.
 
-# Python Setup
-We recommend installation with `uv` (on all platforms, but especially on MacOS and Linux).  If you wish to use `conda` see notes at the end of these instructions.
+## Setup
 
-## Windows Ipopt Installation
-Ipopt binary installation is tricky, and we find the most reliable method is to use Anaconda (even if you will otherwise use `uv`).  To do so, install ipopt in your base Anaconda with
+Use `uv` for all Python environment management.
+
+1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/).
+   - Linux/macOS: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+   - Windows PowerShell: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+   - Windows winget: `winget install --id=astral-sh.uv -e`
+2. Synchronize the environment:
 
 ```bash
-conda install -n base -c conda-forge ipopt=3.11.1 pkg-config
+uv sync
 ```
-  - For Windows, version `3.11.1` seems to be essential.
-  - If you have clutter in your base Anaconda which prevents this from correctly installing, then you may need to reinstall Anaconda.
-  - If you run into issues the binary dependencies in Julia are bullet-proof and seamless.
 
-## Setup with uv
-`uv` is a much faster alternative to Conda, even if it has incomplete support for challenging binary dependencies.
+The project uses CVXPY for optimization. Convex problems use CVXPY's standard
+open-source backends, and smooth nonlinear examples use UNO through the
+`unopy` wheel. No external optimizer executable or conda environment is needed.
 
-1. Install [uv](https://github.com/astral-sh/uv#installation). This is a usually a one-line installation:
-     - On Linux/MacOS: `curl -LsSf https://astral.sh/uv/install.sh | sh`
-     - On Windows: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"` or with winget `winget install --id=astral-sh.uv  -e`
-     - If you have any installation issues, [see the docs](https://docs.astral.sh/uv/getting-started/installation/) for troubleshooting
-2. Install optimizer dependencies.
-     - On MacOS: `brew install ipopt pkg-config`
-     - Linux: `sudo apt-get install coinor-libipopt-dev libblas-dev liblapack-dev pkg-config`
-     - Windows: See note above if you have not previously installed Ipopt or JAX
-3. Synchronize the environment
-```bash
-  uv sync
-```
-4. **Linux only — obtain the `ipopt` executable.** On Linux the `coinor-libipopt-dev` package provides the Ipopt *library* (needed to build `cyipopt` during `uv sync`) but **not** the `ipopt` command-line executable, which Pyomo's `SolverFactory("ipopt")` invokes to solve the models. The simplest way to get a prebuilt binary is via the IDAES extensions:
-```bash
-  uv run --with idaes-pse idaes get-extensions
-```
-   - This installs `ipopt` (and related solvers) into `~/.idaes/bin`. Add that directory to your `PATH` so Pyomo can find it, e.g. `export PATH="$HOME/.idaes/bin:$PATH"`.
-   - On MacOS (`brew install ipopt`) and Windows (`conda install ... ipopt`) this step is unnecessary because those installs already include the `ipopt` executable.
-5. Finally, you will want to make sure you activate the python environment each time you use it.
-   - In VS Code you can activate the default environment with `>Python: Select Interpreter` to be the `.venv` local to the directory
-   - If the debugger isn't working in that case, sometimes setting the vscode `terminal.integrated.shellIntegration.enabled: true` in the settings can help
-   - Outside of vscode, a simple, platform specific CLI line will [activate .venv](https://docs.python.org/3/tutorial/venv.html#creating-virtual-environments) in your terminal.
-
-## Optimization solvers
-The models use two solver paths:
-
-- **Convex / DCP models** (e.g. asset pricing, `asset_pricing_matern_cvxpy.py`) are solved with [`cvxpy`](https://www.cvxpy.org/) using open-source solvers — **Clarabel, OSQP, SCS, and HiGHS**. These require **no extra setup**: `cvxpy` bundles all four as dependencies, so `uv sync` installs them automatically (HiGHS arrives via `highspy`).
-- **Nonconvex / NLP models** (neoclassical growth, neoclassical human capital, optimal advertising, concave-convex growth — the `*_matern_cvxpy.py` files) are solved through `cvxpy`'s DNLP interface (`prob.solve(nlp=True, ...)`), which hands the smooth nonlinear program to a nonlinear solver. The default is **UNO**, via [`unopy`](https://pypi.org/project/unopy/) — a self-contained binary wheel that statically bundles `libuno`, so `uv sync` installs it with no extra setup. This includes the concave-convex model: its exact complementarity (MPCC) reformulation uses a flat warm start with the marginal product seeded on the *active* production branch (consistent with the complementarity constraints), and UNO resolves the bistable threshold structure. **IPOPT** (via `cyipopt`, also in-process) stays selectable. No solver binary on `PATH` is needed for this path. The figure/table scripts take `--implementation cvxpy|pyomo` (default `cvxpy`), including the concave-convex **threshold** figure.
-- **Pyomo path (alternative).** The same nonconvex models also ship a `pyomo` implementation (e.g. `neoclassical_growth_matern.py`, selected with `--implementation pyomo`) that drives the `ipopt` *binary* on `PATH` — see step 4 above (the IDAES `ipopt` executable on Linux; `brew`/`conda` on MacOS/Windows). UNO is used only through `cvxpy` (the `unopy` wheel above), so no standalone solver binary needs to be installed for it.
-
-**Troubleshooting**:
-- If you receive JAX errors about DLL load failures, you may need to update [https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170#visual-studio-2015-2017-2019-and-2022](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170#visual-studio-2015-2017-2019-and-2022)
-- See notes above on Windows Ipopt installation challenges
+The human-capital example uses `nlls_gram` for its small JAX float64
+initial-condition solve.
 
 ## Figure Replication
-After installation, to generate all of the figures in the paper and the appendices,
+
+Generate the paper and appendix figures with:
 
 ```bash
-python all_figures.py
+uv run python all_figures.py
 ```
 
-The output will be in the `./figures` folder
+Outputs are written to `./figures`.
 
 ## Example Usage
-The individual files support CLI arguments.  To pick specific points rather than the linspace grid, pass in `--train_points_list` as below
+
+Individual scripts support CLI arguments through `jsonargparse`:
 
 ```bash
-python neoclassical_growth_matern.py
-python neoclassical_growth_matern.py --train_points=5
-python neoclassical_growth_matern.py --rho=5.0
-python neoclassical_growth_matern.py --train_points_list="[0.0,2.0,5.0,10.0,20.0]"
-python neoclassical_growth_matern.py --train_points=20 --train_T=10.0 --test_T=10.0 --k_0=0.5
+uv run python neoclassical_growth_matern.py
+uv run python neoclassical_growth_matern.py --train_points=5
+uv run python neoclassical_growth_matern.py --rho=5.0
+uv run python neoclassical_growth_matern.py --train_points_list="[0.0,2.0,5.0,10.0,20.0]"
+uv run python neoclassical_growth_matern.py --train_points=20 --train_T=10.0 --test_T=10.0 --k_0=0.5
 ```
 
-These functions can also be imported and called directly, for example,
+The functions can also be imported directly:
 
 ```python
 from neoclassical_growth_matern import neoclassical_growth_matern
+
 sol = neoclassical_growth_matern(rho=10.0)
-print(sol["c_rel_error"].mean())~~~~
+print(sol["c_rel_error"].mean())
 ```
 
-## Python Conda Installation
-If you prefer to use `conda` for your entire environment management, install `uv` as above, then generate a requirements file and a conda environment
+## Models
+
+- `asset_pricing_matern.py`: convex asset-pricing QP.
+- `neoclassical_growth_matern.py`: baseline neoclassical growth DNLP.
+- `neoclassical_growth_concave_convex_matern.py`: concave-convex growth DNLP.
+- `neoclassical_human_capital_matern.py`: two-capital human-capital DNLP.
+- `optimal_advertising_matern.py`: optimal-advertising DNLP.
+
+## Tests
+
+Run the Python smoke and initialization checks with:
 
 ```bash
-uv pip freeze > requirements.txt
-conda create -n kernels python=3.11
-conda activate kernels
-pip install -r requirements.txt
-conda install -c conda-forge ipopt=3.11.1
+uv run python -m unittest discover -s tests
 ```
-
-
-# Julia Setup
-Julia is more straightforward and cross-platform
-1. If required, install Julia from [juliaup](https://github.com/JuliaLang/juliaup).  This can be done in a one-line terminal command:
-   - MacOS/Linux: `curl -fsSL https://install.julialang.org | sh`
-   - Windows: `winget install --name Julia --id 9NJNWW8PVKMN -e -s msstore`
-2. Install the [VS Code Julia extension](https://marketplace.visualstudio.com/items?itemName=julialang.language-julia).  See [here](https://julia.quantecon.org/getting_started_julia/getting_started.html#setting-up-git-and-vs-code) for more details.
-3. Then activate and instantiate the environment to get the required packages.  See [here](https://julia.quantecon.org/getting_started_julia/getting_started.html#installing-packages) for more.
-     - If you start a Julia REPL is VS Code, then you just need: `] instantiate`

@@ -1,14 +1,21 @@
+import time
 import jax
 import jax.numpy as jnp
 import numpy as np
-import pyomo.environ as pyo
-from pyomo.opt import TerminationCondition
+import cvxpy as cp
 import jsonargparse
 from jax import config
 from kernels import integrated_matern_kernel_matrices
+from rkhs import rkhs_norm_squared
 from typing import List, Optional
 
 config.update("jax_enable_x64", True)
+
+# CVXPY DNLP implementation. With z = k**a the concave-convex envelope
+# A*max(k**a, b_1*k**a - b_2) is convex-PWL and bounds output Y from below;
+# two complementarity equalities pin the marginal product P to the active branch
+# and force Y to bind -- an exact reformulation, no smoothing.
+NLP_OPTIONS = dict(preset="filtersqp")
 
 
 def neoclassical_growth_concave_convex_matern(
@@ -22,7 +29,6 @@ def neoclassical_growth_concave_convex_matern(
     nu: float = 0.5,
     sigma: float = 1.0,
     rho: float = 10,
-    solver_type: str = "ipopt",
     train_T: float = 40.0,
     train_points: int = 41,
     test_T: float = 50,
@@ -40,84 +46,100 @@ def neoclassical_growth_concave_convex_matern(
     test_data = jnp.linspace(0, test_T, test_points)
     benchmark_grid = jnp.linspace(0, benchmark_T, benchmark_points)
 
-    # Construct kernel matrices
+    # Construct kernel matrices. CVXPY needs numpy arrays at the solver boundary.
     N = len(train_data)
     K, K_tilde = integrated_matern_kernel_matrices(
         train_data, train_data, nu, sigma, rho
     )
-    K = np.array(K)  # pyomo doesn't support jax arrays
-    K_tilde = np.array(K_tilde)
+    K = np.asarray((K + K.T) / 2)  # symmetrize -> exactly PSD for quad_form
+    K_tilde = np.asarray(K_tilde)
 
-    # Create pyomo model and variables
-    m = pyo.ConcreteModel()
-    m.I = range(N)
-    m.alpha_mu = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
-    #m.alpha_c = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
-    m.alpha_k = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
-    #m.c_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=1.0)
-    m.mu_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=1.0)  # mu*c =1
+    # Consumption is represented explicitly with c*mu = 1. z = k**a linearizes the
+    # production branches; Y is output, P the marginal product of capital.  k and
+    # mu carry lower bounds so trial points stay in the domain of k**a and 1/mu.
+    alpha_mu, alpha_k = cp.Variable(N), cp.Variable(N)
+    mu_0 = cp.Variable(nonneg=True)
+    c, z, Y, P = cp.Variable(N), cp.Variable(N), cp.Variable(N), cp.Variable(N)
+    k, mu = cp.Variable(N), cp.Variable(N)
 
-    # Map kernels to variables. Pyomo doesn't support c_0 + K_tilde @ m.alpha_c
-    def mu(m, i):
-        return m.mu_0 + sum(K_tilde[i, j] * m.alpha_mu[j] for j in m.I)
+    # Flat warm start at k_0 (no ramp toward a steady state): consumption held at
+    # the capital-stationary level, with z, Y, P on the active production branch
+    # (m1 below the kink k_bar, m2 above) so complementarity holds at the start.
+    k_bar = (b_2 / (b_1 - 1)) ** (1 / a)
+    f_0 = A * max(k_0**a, b_1 * k_0**a - b_2)
+    c_0 = f_0 - delta * k_0
+    m1_0 = A * a * k_0 ** (a - 1)
+    alpha_mu.value = np.zeros(N)
+    alpha_k.value = np.zeros(N)
+    mu_0.value = 1.0 / c_0
+    k.value = np.full(N, k_0)
+    mu.value = np.full(N, 1.0 / c_0)
+    c.value = np.full(N, c_0)
+    z.value = np.full(N, k_0**a)
+    Y.value = np.full(N, f_0)
+    P.value = np.full(N, b_1 * m1_0 if k_0 >= k_bar else m1_0)
 
-    #def c(m, i):
-        #return m.c_0 + sum(K_tilde[i, j] * m.alpha_c[j] for j in m.I)
+    dmu_dt = K @ alpha_mu
+    dk_dt = K @ alpha_k
+    m1 = A * a * cp.power(k, a - 1)
+    m2 = b_1 * m1
+    branch_low = A * z
+    branch_high = A * (b_1 * z - b_2)
+    prob = cp.Problem(
+        cp.Minimize(
+            cp.quad_form(alpha_mu, cp.psd_wrap(K))
+            + cp.quad_form(alpha_k, cp.psd_wrap(K))
+        ),
+        [
+            k == k_0 + K_tilde @ alpha_k,  # state/costate from the kernel expansion
+            mu == mu_0 + K_tilde @ alpha_mu,
+            k >= 1e-4, mu >= 1e-4, c >= 1e-4, z >= 1e-6,  # domain bounds
+            z == cp.power(k, a),
+            cp.maximum(branch_low, branch_high) <= Y,  # production envelope
+            cp.multiply(Y - branch_low, P - m2) == 0,  # pin P, bind Y
+            cp.multiply(Y - branch_high, P - m1) == 0,
+            dk_dt == Y - delta * k - c,  # resource
+            cp.multiply(c, mu) == 1.0,  # shadow price
+            dmu_dt == -cp.multiply(mu, P - delta - rho_hat),  # Euler (MPK = P)
+        ],
+    )
+    assert prob.is_dnlp()
+    options = dict(NLP_OPTIONS)
+    if not verbose:
+        options["logger"] = "SILENT"  # mute UNO's C-level iteration table
+    start = time.perf_counter()
+    prob.solve(nlp=True, solver=cp.UNO, verbose=verbose, **options)
+    elapsed = time.perf_counter() - start
+    print(f"elapsed solve(s) = {elapsed}")
+    if prob.status not in ("optimal", "optimal_inaccurate"):
+        print(f"solver status: {prob.status}")
 
-    def k(m, i):
-        return k_0 + sum(K_tilde[i, j] * m.alpha_k[j] for j in m.I)
-
-    def dmu_dt(m, i):
-        return sum(K[i, j] * m.alpha_mu[j] for j in m.I)
-
-    def dk_dt(m, i):
-        return sum(K[i, j] * m.alpha_k[j] for j in m.I)
-
-    # Production function
-    base = b_2 / (b_1 - 1)
-    exponent = 1 / a
-    k_bar = base**exponent
-
-    def f(k):
-        return A * pyo.Expr_if(k < k_bar, k**a, b_1 * k**a - b_2)
-
-    def f_prime(k):
-        return pyo.Expr_if(
-            k < k_bar, A * a * (k ** (a - 1)), A * a * b_1 * (k ** (a - 1))
-        )
-
-    # Define constraints and objective for model and solve
-    @m.Constraint(m.I)  # for each index in m.I
-    def resource_constraint(m, i):
-        return dk_dt(m, i) == f(k(m, i)) - delta * k(m, i) - (1/mu(m, i))
-
-    @m.Constraint(m.I)  # for each index in m.I
-    def euler(m, i):
-        return dmu_dt(m, i) == -mu(m, i) * (f_prime(k(m, i)) - delta - rho_hat)
-
-    #@m.Constraint(m.I)  # for each index in m.I
-    #def shadow_price(m, i):
-        #return c(m, i) * mu(m, i) - 1.0 == 0.0
-
-
-    @m.Objective(sense=pyo.minimize)
-    def min_norm(m):  # alpha @ K @ alpha not supported by pyomo
-        return sum(K[i, j] * m.alpha_mu[i] * m.alpha_mu[j] for i in m.I for j in m.I) + sum(K[i, j] * m.alpha_k[i] * m.alpha_k[j] for i in m.I for j in m.I)
-
-    solver = pyo.SolverFactory(solver_type)
-    options = {
-        "tol": 1e-8,  # Tighten the tolerance for optimality
-        "dual_inf_tol": 1e-8,  # Tighten the dual infeasibility tolerance
-        "constr_viol_tol": 1e-8,  # Tighten the constraint violation tolerance
-        "max_iter": 5000,  # Adjust the maximum number of iterations if needed
-    }  # See https://coin-or.github.io/Ipopt/OPTIONS.html for more details # can add options here.   See https://coin-or.github.io/Ipopt/OPTIONS.html#OPTIONS_AMPL
-    results = solver.solve(m, tee=verbose, options=options)
-    if not results.solver.termination_condition == TerminationCondition.optimal:
-        print(str(results.solver))  # raise exception?
-
-    alpha_mu = jnp.array([pyo.value(m.alpha_mu[i]) for i in m.I])
-    alpha_k = jnp.array([pyo.value(m.alpha_k[i]) for i in m.I])
-    mu_0 = pyo.value(m.mu_0)
+    alpha_mu = jnp.array(alpha_mu.value)
+    alpha_k = jnp.array(alpha_k.value)
+    mu_0 = float(mu_0.value)
+    rkhs_norms = {
+        "k": rkhs_norm_squared(alpha_k, K),
+        "mu": rkhs_norm_squared(alpha_mu, K),
+    }
+    k_train = jnp.array(k.value)
+    mu_train = jnp.array(mu.value)
+    c_train = jnp.array(c.value)
+    z_train = jnp.array(z.value)
+    Y_train = jnp.array(Y.value)
+    P_train = jnp.array(P.value)
+    m1_train = A * a * k_train ** (a - 1)
+    m2_train = b_1 * m1_train
+    branch_low_train = A * z_train
+    branch_high_train = A * (b_1 * z_train - b_2)
+    helper_residuals = {
+        "z_power": z_train - k_train**a,
+        "shadow_price": c_train * mu_train - 1.0,
+        "output_binding": Y_train - jnp.maximum(branch_low_train, branch_high_train),
+        "complementarity_low": (Y_train - branch_low_train) * (P_train - m2_train),
+        "complementarity_high": (Y_train - branch_high_train) * (P_train - m1_train),
+        "marginal_product_lower_violation": jnp.maximum(m1_train - P_train, 0.0),
+        "marginal_product_upper_violation": jnp.maximum(P_train - m2_train, 0.0),
+    }
 
     # Interpolator using training data
     @jax.jit
@@ -128,22 +150,34 @@ def neoclassical_growth_concave_convex_matern(
         )
         mu_test = mu_0 + K_tilde_test @ alpha_mu
         k_test = k_0 + K_tilde_test @ alpha_k
-        c_test  = 1.0 / mu_test
+        c_test = 1.0 / mu_test
         return k_test, c_test
 
     # Generate test_data and compare to the benchmark
     k_test, c_test = kernel_solution(test_data)
 
-    print(f"solve_time(s) = {results.solver.Time}")
+    solve_time = prob.solver_stats.solve_time
+    if solve_time is None:
+        solve_time = elapsed
+    print(f"solve_time(s) = {solve_time}")
     return {
         "t_train": train_data,
         "t_test": test_data,
         "k_test": k_test,
         "c_test": c_test,
         "alpha_m": alpha_mu,
+        "alpha_mu": alpha_mu,
         "alpha_k": alpha_k,
         "mu_0": mu_0,
-        "solve_time": results.solver.Time,
+        "rkhs_norms": rkhs_norms,
+        "helper_residuals": helper_residuals,
+        "k_train": k_train,
+        "mu_train": mu_train,
+        "c_train": c_train,
+        "z_train": z_train,
+        "Y_train": Y_train,
+        "P_train": P_train,
+        "solve_time": solve_time,
         "kernel_solution": kernel_solution,  # interpolator
     }
 

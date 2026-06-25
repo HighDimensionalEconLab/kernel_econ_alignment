@@ -4,7 +4,6 @@ import numpy as np
 import os
 import jsonargparse
 from optimal_advertising_matern import optimal_advertising_matern
-from optimal_advertising_matern_cvxpy import optimal_advertising_matern_cvxpy
 
 from mpl_toolkits.axes_grid1.inset_locator import (
     zoomed_inset_axes,
@@ -29,14 +28,8 @@ params = {
 plt.rcParams.update(params)
 
 
-## Plot for optimal advertising.  implementation selects the solve backend:
-## "cvxpy" (default, DNLP via UNO) or "pyomo" (Ipopt binary).
-def main(implementation: str = "cvxpy"):
-    solve = {
-        "cvxpy": optimal_advertising_matern_cvxpy,
-        "pyomo": optimal_advertising_matern,
-    }[implementation]
-    sol = solve()
+def main():
+    sol = optimal_advertising_matern()
     output_path = "figures/optimal_advertising.pdf"
 
     plt.figure(figsize=(15, 7))

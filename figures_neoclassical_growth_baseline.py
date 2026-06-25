@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import os
 import jsonargparse
 from neoclassical_growth_matern import neoclassical_growth_matern
-from neoclassical_growth_matern_cvxpy import neoclassical_growth_matern_cvxpy
 
 from mpl_toolkits.axes_grid1.inset_locator import (
     zoomed_inset_axes,
@@ -190,14 +189,8 @@ def plot_neoclassical_growth_baseline(
     plt.savefig(output_path, format="pdf")
 
 
-# implementation selects the solve backend: "cvxpy" (default, DNLP via UNO)
-# or "pyomo" (Ipopt binary).
-def main(implementation: str = "cvxpy"):
-    solve = {
-        "cvxpy": neoclassical_growth_matern_cvxpy,
-        "pyomo": neoclassical_growth_matern,
-    }[implementation]
-    sol_matern = solve()
+def main():
+    sol_matern = neoclassical_growth_matern()
     plot_neoclassical_growth_baseline(
         sol_matern, "figures/neoclassical_growth_model_baseline.pdf"
     )

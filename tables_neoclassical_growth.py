@@ -2,22 +2,14 @@ import pandas as pd
 import jsonargparse
 
 from neoclassical_growth_matern import neoclassical_growth_matern
-from neoclassical_growth_matern_cvxpy import neoclassical_growth_matern_cvxpy
 
 
-# implementation selects the solve backend: "cvxpy" (default, DNLP via UNO)
-# or "pyomo" (Ipopt binary).
-def main(implementation: str = "cvxpy"):
-    solve = {
-        "cvxpy": neoclassical_growth_matern_cvxpy,
-        "pyomo": neoclassical_growth_matern,
-    }[implementation]
-
-    sol_default = solve()
-    sol_nu_1_5 = solve(nu=1.5)
-    sol_nu_2_5 = solve(nu=2.5, lambda_p=1e-4)
-    sol_rho_2 = solve(rho=2)
-    sol_rho_20 = solve(rho=20)
+def main():
+    sol_default = neoclassical_growth_matern()
+    sol_nu_1_5 = neoclassical_growth_matern(nu=1.5)
+    sol_nu_2_5 = neoclassical_growth_matern(nu=2.5)
+    sol_rho_2 = neoclassical_growth_matern(rho=2)
+    sol_rho_20 = neoclassical_growth_matern(rho=20)
 
     k_rel_error = sol_default["k_rel_error"]
     c_rel_error = sol_default["c_rel_error"]

@@ -2,9 +2,11 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import json
 import jsonargparse
+import subprocess
+import sys
 from neoclassical_growth_concave_convex_matern import neoclassical_growth_concave_convex_matern
-from neoclassical_growth_concave_convex_matern_cvxpy import neoclassical_growth_concave_convex_matern_cvxpy
 
 from mpl_toolkits.axes_grid1.inset_locator import (
     zoomed_inset_axes,
@@ -30,19 +32,76 @@ params = {
 plt.rcParams.update(params)
 
 
-## Plots for concave-convex production function.  implementation selects the solve
-## backend and defaults to "cvxpy", the pyomo-free DNLP reformulation solved with
-## UNO.  Pass --implementation pyomo to use the pyomo/ipopt model instead.
-def main(implementation: str = "cvxpy"):
-    solve = {
-        "cvxpy": neoclassical_growth_concave_convex_matern_cvxpy,
-        "pyomo": neoclassical_growth_concave_convex_matern,
-    }[implementation]
+def parse_threshold_payload(stdout: str):
+    for line in reversed(stdout.splitlines()):
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        return [
+            {key: jnp.asarray(value) for key, value in item.items() if key != "k_0"}
+            for item in payload
+        ]
+    return []
 
-    sol_1 = solve(k_0=0.5, train_points=20)
-    sol_2 = solve(k_0=1.0, train_points=20)
-    sol_3 = solve(k_0=3.0, train_points=20)
-    sol_4 = solve(k_0=4.0, train_points=20)
+
+def solve_threshold_points(k_0_values, timeout_seconds: float):
+    code = """
+import json
+import sys
+
+import numpy as np
+
+from neoclassical_growth_concave_convex_matern import neoclassical_growth_concave_convex_matern
+
+payload = []
+for raw_k_0 in sys.argv[1:]:
+    k_0 = float(raw_k_0)
+    try:
+        sol = neoclassical_growth_concave_convex_matern(k_0=k_0, train_points=20)
+    except Exception:
+        continue
+    payload.append({
+        "k_0": k_0,
+        "t_train": np.asarray(sol["t_train"]).tolist(),
+        "t_test": np.asarray(sol["t_test"]).tolist(),
+        "k_test": np.asarray(sol["k_test"]).tolist(),
+        "c_test": np.asarray(sol["c_test"]).tolist(),
+    })
+print(json.dumps(payload))
+"""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", code, *[str(float(k_0)) for k_0 in k_0_values]],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        return []
+    if result.returncode != 0:
+        return []
+
+    return parse_threshold_payload(result.stdout)
+
+
+def solve_threshold_group(k_0_values):
+    sols = solve_threshold_points(k_0_values, timeout_seconds=3.0)
+    if len(sols) == len(k_0_values):
+        return sols
+
+    fallback = []
+    for k_0 in k_0_values:
+        fallback.extend(solve_threshold_points([k_0], timeout_seconds=3.0))
+    return fallback
+
+
+def main():
+    sol_1 = neoclassical_growth_concave_convex_matern(k_0=0.5, train_points=20)
+    sol_2 = neoclassical_growth_concave_convex_matern(k_0=1.0, train_points=20)
+    sol_3 = neoclassical_growth_concave_convex_matern(k_0=3.0, train_points=20)
+    sol_4 = neoclassical_growth_concave_convex_matern(k_0=4.0, train_points=20)
     output_path = "figures/neoclassical_growth_model_concave_convex.pdf"
 
     plt.figure(figsize=(15, 8))
@@ -86,16 +145,17 @@ def main(implementation: str = "cvxpy"):
 
     #plt.savefig(output_path, format="pdf")
 
-    # Sweep x_0 across both basins, skipping any failed or non-physical solve.
+    # Sweep x_0 across both basins, skipping failed, non-physical, or stalled solves.
     sols = []
-    for k_0 in np.linspace(0.5, 4.0, 70):
-        try:
-            sol = solve(k_0=k_0, train_points=20)
-        except Exception:
-            continue
-        k = np.asarray(sol["k_test"])
-        if np.all(np.isfinite(k)) and k.min() > 0 and k.max() < 10:
-            sols.append(sol)
+    threshold_grid = np.linspace(0.5, 4.0, 40)
+    for i in range(0, len(threshold_grid), 8):
+        for sol in solve_threshold_group(threshold_grid[i : i + 8]):
+            k = np.asarray(sol["k_test"])
+            if np.all(np.isfinite(k)) and k.min() > 0 and k.max() < 10:
+                sols.append(sol)
+
+    if not sols:
+        raise RuntimeError("No finite concave-convex threshold trajectories solved.")
 
     output_path = "figures/neoclassical_growth_model_concave_convex_threshold.pdf"
 

@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import os
 import jsonargparse
 from asset_pricing_matern import asset_pricing_matern
-from asset_pricing_matern_cvxpy import asset_pricing_matern_cvxpy
 
 from mpl_toolkits.axes_grid1.inset_locator import (
     zoomed_inset_axes,
@@ -128,14 +127,8 @@ def plot_asset_pricing(
     plt.savefig(output_path, format="pdf")
 
 
-# Plots with various parameters.  implementation selects the solve backend:
-# "cvxpy" (default, open-source DCP/QP solvers) or "pyomo" (Ipopt).
-def main(implementation: str = "cvxpy"):
-    solve = {
-        "cvxpy": asset_pricing_matern_cvxpy,
-        "pyomo": asset_pricing_matern,
-    }[implementation]
-    sol_matern = solve()
+def main():
+    sol_matern = asset_pricing_matern()
     plot_asset_pricing(sol_matern, "figures/asset_pricing_contiguous.pdf")
 
 

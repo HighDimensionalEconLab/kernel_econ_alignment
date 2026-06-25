@@ -1,14 +1,21 @@
+import time
 import jax
 import jax.numpy as jnp
 import numpy as np
-import pyomo.environ as pyo
-from pyomo.opt import TerminationCondition
+import cvxpy as cp
 import jsonargparse
 from jax import config
 from kernels import integrated_matern_kernel_matrices
+from rkhs import rkhs_norm_squared
 from typing import List, Optional
 
 config.update("jax_enable_x64", True)
+
+# CVXPY DNLP implementation. The advertising-capital FOC collocation is
+# nonconvex (the bilinear (1-x)*u and mu*u terms, and the
+# u**((1-kappa)/kappa) marginal-cost relation), so CVXPY hands the smooth
+# nonlinear program to UNO.
+NLP_OPTIONS = dict(preset="filtersqp")
 
 
 def optimal_advertising_matern(
@@ -20,7 +27,6 @@ def optimal_advertising_matern(
     nu: float = 0.5,
     sigma: float = 1.0,
     rho: float = 15,
-    solver_type: str = "ipopt",
     train_T: float = 40.0,
     train_points: int = 41,
     test_T: float = 50.0,
@@ -38,73 +44,68 @@ def optimal_advertising_matern(
     test_data = jnp.linspace(0, test_T, test_points)
     benchmark_grid = jnp.linspace(0, benchmark_T, benchmark_points)
 
-    # Construct kernel matrices
+    # Construct kernel matrices. CVXPY needs numpy arrays at the solver boundary.
     N = len(train_data)
     K, K_tilde = integrated_matern_kernel_matrices(
         train_data, train_data, nu, sigma, rho
     )
-    K = np.array(K)  # pyomo doesn't support jax arrays
-    K_tilde = np.array(K_tilde)
+    K = np.asarray((K + K.T) / 2)  # symmetrize -> exactly PSD for quad_form
+    K_tilde = np.asarray(K_tilde)
 
-    # Create pyomo model and variables
-    m = pyo.ConcreteModel()
-    m.I = range(N)
-    m.alpha_x = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
-    m.alpha_mu = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
-    m.alpha_u = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
-    m.mu_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=0.0)
-    m.u_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=0.0)
+    # Decision variables, initialized with zero kernel coefficients and
+    # mu_0 = u_0 = 0.
+    alpha_x, alpha_mu, alpha_u = cp.Variable(N), cp.Variable(N), cp.Variable(N)
+    mu_0 = cp.Variable(nonneg=True)
+    u_0 = cp.Variable(nonneg=True)
+    alpha_x.value = np.zeros(N)
+    alpha_mu.value = np.zeros(N)
+    alpha_u.value = np.zeros(N)
+    mu_0.value = u_0.value = 0.0
 
-    # Map kernels to variables. Pyomo doesn't support mu_0 + K_tilde @ m.alpha_mu
-    def mu(m, i):
-        return m.mu_0 + sum(K_tilde[i, j] * m.alpha_mu[j] for j in m.I)
-
-    def x(m, i):
-        return x_0 + sum(K_tilde[i, j] * m.alpha_x[j] for j in m.I)
-
-    def dmu_dt(m, i):
-        return sum(K[i, j] * m.alpha_mu[j] for j in m.I)
-
-    def dx_dt(m, i):
-        return sum(K[i, j] * m.alpha_x[j] for j in m.I)
-
-    def u(m, i):
-        return m.u_0 + sum(K_tilde[i, j] * m.alpha_u[j] for j in m.I)
-    
-    # Define constraints and objective for model and solve
-    @m.Constraint(m.I)  # for each index in m.I
-    def dx_dt_constraint(m, i):
-        return dx_dt(m, i) == (1 - x(m, i))*u(m, i)- beta*x(m,i)
+    # Affine kernel expansions. x is the market-share state, mu the costate,
+    # u the advertising control.
+    mu = mu_0 + K_tilde @ alpha_mu
+    x = x_0 + K_tilde @ alpha_x
+    u = u_0 + K_tilde @ alpha_u
+    dmu_dt = K @ alpha_mu
+    dx_dt = K @ alpha_x
 
     gamma = (beta + rho_hat) / c
-    @m.Constraint(m.I)  # for each index in m.I
-    def dmu_dt_constraint(m, i):
-        return dmu_dt(m, i) == -gamma + (rho_hat + beta)*mu(m, i) + mu(m, i)*u(m, i)
+    prob = cp.Problem(
+        cp.Minimize(
+            cp.quad_form(alpha_x, cp.psd_wrap(K))
+            + cp.quad_form(alpha_mu, cp.psd_wrap(K))
+            + cp.quad_form(alpha_u, cp.psd_wrap(K))
+        ),
+        [
+            u >= 1e-8,
+            dx_dt == cp.multiply(1 - x, u) - beta * x,  # market-share dynamics
+            dmu_dt == -gamma + (rho_hat + beta) * mu + cp.multiply(mu, u),  # costate
+            cp.power(u, (1.0 - kappa) / kappa) - kappa * cp.multiply(mu, 1 - x)
+            == 0.0,  # shadow price (marginal cost of advertising)
+        ],
+    )
+    assert prob.is_dnlp()
+    options = dict(NLP_OPTIONS)
+    if not verbose:
+        options["logger"] = "SILENT"  # mute UNO's C-level iteration table
+    start = time.perf_counter()
+    prob.solve(nlp=True, solver=cp.UNO, verbose=verbose, **options)
+    elapsed = time.perf_counter() - start
+    print(f"elapsed solve(s) = {elapsed}")
+    if prob.status not in ("optimal", "optimal_inaccurate"):
+        print(f"solver status: {prob.status}")
 
-    @m.Constraint(m.I)  # for each index in m.I
-    def shadow_price(m, i):
-        return u(m, i)**((1.0-kappa)/kappa) - kappa*mu(m, i)*(1 - x(m, i)) == 0.0
-    
-    @m.Objective(sense=pyo.minimize)
-    def min_norm(m):  # alpha @ K @ alpha not supported by pyomo
-        return sum(K[i, j] * m.alpha_mu[i] * m.alpha_mu[j] for i in m.I for j in m.I)+sum(K[i, j] * m.alpha_x[i] * m.alpha_x[j] for i in m.I for j in m.I) 
-
-    solver = pyo.SolverFactory(solver_type)
-    options = {
-        "tol": 1e-6,  # Tighten the tolerance for optimality
-        "dual_inf_tol": 1e-6,  # Tighten the dual infeasibility tolerance
-        "constr_viol_tol": 1e-6,  # Tighten the constraint violation tolerance
-        "max_iter": 1000,  # Adjust the maximum number of iterations if needed
-    } 
-    results = solver.solve(m, tee=verbose, options=options)
-    if not results.solver.termination_condition == TerminationCondition.optimal:
-        print(str(results.solver))  # raise exception?
-
-    alpha_mu = jnp.array([pyo.value(m.alpha_mu[i]) for i in m.I])
-    alpha_x = jnp.array([pyo.value(m.alpha_x[i]) for i in m.I])
-    alpha_u = jnp.array([pyo.value(m.alpha_u[i]) for i in m.I])
-    u_0 = pyo.value(m.u_0)
-    mu_0 = pyo.value(m.mu_0)
+    alpha_mu = jnp.array(alpha_mu.value)
+    alpha_x = jnp.array(alpha_x.value)
+    alpha_u = jnp.array(alpha_u.value)
+    u_0 = float(u_0.value)
+    mu_0 = float(mu_0.value)
+    rkhs_norms = {
+        "x": rkhs_norm_squared(alpha_x, K),
+        "mu": rkhs_norm_squared(alpha_mu, K),
+        "u": rkhs_norm_squared(alpha_u, K),
+    }
 
     # Interpolator using training data
     @jax.jit
@@ -121,7 +122,10 @@ def optimal_advertising_matern(
     # Generate test_data and compare to the benchmark
     x_test, mu_test, u_test = kernel_solution(test_data)
 
-    print(f"solve_time(s) = {results.solver.Time}")
+    solve_time = prob.solver_stats.solve_time
+    if solve_time is None:
+        solve_time = elapsed
+    print(f"solve_time(s) = {solve_time}")
     return {
         "t_train": train_data,
         "t_test": test_data,
@@ -130,9 +134,11 @@ def optimal_advertising_matern(
         "u_test": u_test,
         "alpha_mu": alpha_mu,
         "alpha_x": alpha_x,
+        "alpha_u": alpha_u,
         "mu_0": mu_0,
         "u_0": u_0,
-        "solve_time": results.solver.Time,
+        "rkhs_norms": rkhs_norms,
+        "solve_time": solve_time,
         "kernel_solution": kernel_solution,  # interpolator
     }
 

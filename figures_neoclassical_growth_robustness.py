@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import os
 import jsonargparse
 from neoclassical_growth_matern import neoclassical_growth_matern
-from neoclassical_growth_matern_cvxpy import neoclassical_growth_matern_cvxpy
 
 from mpl_toolkits.axes_grid1.inset_locator import (
     zoomed_inset_axes,
@@ -194,15 +193,22 @@ def plot_neoclassical_growth(
     plt.savefig(output_path, format="pdf")
 
 
-# Plots with various parameters.  implementation selects the solve backend:
-# "cvxpy" (default, DNLP via IPOPT) or "pyomo" (Ipopt binary).
-def main(implementation: str = "cvxpy"):
-    solve = {
-        "cvxpy": neoclassical_growth_matern_cvxpy,
-        "pyomo": neoclassical_growth_matern,
-    }[implementation]
-    sol = solve(
-        train_points_list=[0.0, 1.0, 3.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 38.0, 40.0], lambda_p = 1e-6
+def main():
+    sol = neoclassical_growth_matern(
+        train_points_list=[
+            0.0,
+            1.0,
+            3.0,
+            5.0,
+            10.0,
+            15.0,
+            20.0,
+            25.0,
+            30.0,
+            35.0,
+            38.0,
+            40.0,
+        ]
     )
     plot_neoclassical_growth(
         sol,
@@ -212,7 +218,7 @@ def main(implementation: str = "cvxpy"):
         zoom_loc=[10, 20],
     )
 
-    sol = solve(train_T=10.0, train_points=11, test_T=15.0)
+    sol = neoclassical_growth_matern(train_T=10.0, train_points=11, test_T=15.0)
     plot_neoclassical_growth(
         sol,
         "figures/neoclassical_growth_model_far_steady_state.pdf",
