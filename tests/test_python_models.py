@@ -1,4 +1,7 @@
 import importlib
+import json
+import subprocess
+import sys
 import unittest
 
 import jax.numpy as jnp
@@ -71,20 +74,85 @@ class ModelSmokeTests(unittest.TestCase):
         self.assertLess(float(sol["c_rel_error"].mean()), 2e-2)
 
     def test_concave_convex_smoke(self):
-        sol = neoclassical_growth_concave_convex_matern(
-            train_points=11,
-            test_points=10,
-            benchmark_points=80,
-        )
+        sol = neoclassical_growth_concave_convex_matern()
 
         assert_all_finite(self, sol["k_test"])
         assert_all_finite(self, sol["c_test"])
         assert_rkhs_norms(self, sol, {"k", "mu"})
+        self.assertTrue(sol["valid_solution"], sol["rejection_reason"])
         self.assertTrue(bool(jnp.all(sol["k_test"] > 0.0)))
         self.assertTrue(bool(jnp.all(sol["c_test"] > 0.0)))
         for residual in sol["helper_residuals"].values():
             assert_all_finite(self, residual)
-            self.assertLess(float(jnp.max(jnp.abs(residual))), 1e-5)
+        self.assertLess(sol["max_train_residual"], 1e-5)
+        self.assertLess(sol["max_validation_residual"], 5e-3)
+        self.assertLess(sol["p_lower_violation"], 1e-3)
+        self.assertLess(sol["p_upper_violation"], 1e-3)
+
+    def test_concave_convex_interior_cases(self):
+        for k_0 in [0.5, 1.0, 3.0, 4.0]:
+            with self.subTest(k_0=k_0):
+                sol = neoclassical_growth_concave_convex_matern(
+                    k_0=k_0,
+                )
+
+                self.assertTrue(sol["valid_solution"], sol["rejection_reason"])
+                assert_all_finite(self, sol["k_test"])
+                assert_all_finite(self, sol["c_test"])
+                self.assertTrue(bool(jnp.all(sol["k_test"] > 0.0)))
+                self.assertTrue(bool(jnp.all(sol["c_test"] > 0.0)))
+                self.assertLess(sol["max_train_residual"], 1e-5)
+                self.assertLess(sol["max_validation_residual"], 5e-3)
+                self.assertLess(sol["p_lower_violation"], 1e-3)
+                self.assertLess(sol["p_upper_violation"], 1e-3)
+
+    def test_concave_convex_boundary_cases_fail_fast_or_validate(self):
+        code = """
+import json
+from neoclassical_growth_concave_convex_matern import neoclassical_growth_concave_convex_matern
+
+sol = neoclassical_growth_concave_convex_matern(
+    k_0=float(__import__("sys").argv[1]),
+    train_points=11,
+    test_points=10,
+    benchmark_points=80,
+)
+print(json.dumps({
+    "valid_solution": bool(sol["valid_solution"]),
+    "rejection_reason": sol["rejection_reason"],
+    "solve_time": float(sol["solve_time"]),
+    "max_helper_residual": float(sol["max_helper_residual"]),
+    "max_train_residual": float(sol["max_train_residual"]),
+    "max_validation_residual": float(sol["max_validation_residual"]),
+    "p_lower_violation": float(sol["p_lower_violation"]),
+    "p_upper_violation": float(sol["p_upper_violation"]),
+}))
+"""
+        for k_0 in [1.75, 1.846, 1.9, 1.95, 2.0]:
+            with self.subTest(k_0=k_0):
+                result = subprocess.run(
+                    [sys.executable, "-c", code, str(k_0)],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=5.0,
+                )
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                payload = None
+                for line in reversed(result.stdout.splitlines()):
+                    if line.startswith("{"):
+                        payload = json.loads(line)
+                        break
+                self.assertIsNotNone(payload, result.stdout)
+                if payload["valid_solution"]:
+                    self.assertLess(payload["max_train_residual"], 1e-5)
+                    self.assertLess(payload["max_validation_residual"], 5e-3)
+                    self.assertLess(payload["p_lower_violation"], 1e-3)
+                    self.assertLess(payload["p_upper_violation"], 1e-3)
+                else:
+                    self.assertNotEqual(payload["rejection_reason"], "accepted")
+                    self.assertLess(payload["solve_time"], 5.0)
 
     def test_optimal_advertising_smoke(self):
         sol = optimal_advertising_matern(

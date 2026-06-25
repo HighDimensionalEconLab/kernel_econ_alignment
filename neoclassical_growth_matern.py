@@ -51,7 +51,7 @@ def neoclassical_growth_matern(
     K = np.asarray((K + K.T) / 2)  # symmetrize -> exactly PSD for quad_form
     K_tilde = np.asarray(K_tilde)
 
-    # Decision variables: zero kernel coefficients and the steady-flow guess
+    # Decision variables: zero kernel coefficients and the flat k_0 flow guess
     # k_0**a - delta*k_0 for the scalar initial conditions c_0, mu_0 >= 0.
     alpha_mu, alpha_c, alpha_k = cp.Variable(N), cp.Variable(N), cp.Variable(N)
     c_0 = cp.Variable(nonneg=True)

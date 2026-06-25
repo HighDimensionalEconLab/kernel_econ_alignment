@@ -30,12 +30,17 @@ are not penalized; they must be pinned by model equations and residual checks.
 - Algebraic helpers: consumption `c`, production power `z`, output `Y`, and
   marginal product `P`.
 - Objective: `||k||_H^2 + ||mu||_H^2`.
-- Constraints: `z = k^a`, `Y = max(A z, A(b_1 z - b_2))` through epigraph and
-  complementarity, resource equation, Euler equation, and `c*mu = 1`.
-  The model-valid marginal-product interval for `P` is checked as a residual;
-  explicit interval rows made low-capital UNO solves hang.
+- Constraints: solve smooth active-branch candidates for each branch of
+  `A max(k^a, b_1 k^a - b_2)`, then accept only candidates that validate
+  against the original max problem: resource residual, Euler residual,
+  `c*mu = 1`, output binding, and the subgradient interval `m1 <= P <= m2`
+  using the marginal product implied by the costate equation. Residuals are
+  checked on the collocation grid and a denser validation grid over the training
+  horizon; the plotted extrapolation tail is checked for finite positive values.
 - Pyomo comparison: preserves the same reduced RKHS functions as the old Pyomo
-  model while replacing `Expr_if` with explicit algebraic helper constraints.
+  model while replacing `Expr_if` with conservative active-branch enumeration
+  and ex-post validation. Ambiguous or invalid candidates are rejected rather
+  than silently plotted.
 
 ## Human Capital
 
