@@ -1,14 +1,20 @@
-import jax
-import jax.numpy as jnp
-import numpy as np
-import pyomo.environ as pyo
-from pyomo.opt import TerminationCondition
-import jsonargparse
-from jax import config
-from kernels import integrated_matern_kernel_matrices
+import time
 from typing import List, Optional
 
+import jax
+import jax.numpy as jnp
+import jsonargparse
+import numpy as np
+import unopy
+from jax import config
+
+from kernels import integrated_matern_kernel_matrices
+from rkhs import rkhs_norm_squared
+
 config.update("jax_enable_x64", True)
+
+NLP_OPTIONS = dict(preset="ipopt")
+DOMAIN_EPS = 1e-8
 
 
 def optimal_advertising_matern(
@@ -20,7 +26,6 @@ def optimal_advertising_matern(
     nu: float = 0.5,
     sigma: float = 1.0,
     rho: float = 15,
-    solver_type: str = "ipopt",
     train_T: float = 40.0,
     train_points: int = 41,
     test_T: float = 50.0,
@@ -30,98 +35,208 @@ def optimal_advertising_matern(
     train_points_list: Optional[List[float]] = None,
     verbose: bool = False,
 ):
-    # if passing in `train_points` then doesn't us a grid.  Otherwise, uses linspace
+    _ = (benchmark_T, benchmark_points)
     if train_points_list is None:
         train_data = jnp.linspace(0, train_T, train_points)
     else:
         train_data = jnp.array(train_points_list)
     test_data = jnp.linspace(0, test_T, test_points)
-    benchmark_grid = jnp.linspace(0, benchmark_T, benchmark_points)
 
-    # Construct kernel matrices
-    N = len(train_data)
+    n_train = len(train_data)
     K, K_tilde = integrated_matern_kernel_matrices(
         train_data, train_data, nu, sigma, rho
     )
-    K = np.array(K)  # pyomo doesn't support jax arrays
-    K_tilde = np.array(K_tilde)
+    K = np.asarray((K + K.T) / 2)
+    K_tilde = np.asarray(K_tilde)
+    K_jax = jnp.asarray(K)
+    K_tilde_jax = jnp.asarray(K_tilde)
 
-    # Create pyomo model and variables
-    m = pyo.ConcreteModel()
-    m.I = range(N)
-    m.alpha_x = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
-    m.alpha_mu = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
-    m.alpha_u = pyo.Var(m.I, within=pyo.Reals, initialize=0.0)
-    m.mu_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=0.0)
-    m.u_0 = pyo.Var(within=pyo.NonNegativeReals, initialize=0.0)
-
-    # Map kernels to variables. Pyomo doesn't support mu_0 + K_tilde @ m.alpha_mu
-    def mu(m, i):
-        return m.mu_0 + sum(K_tilde[i, j] * m.alpha_mu[j] for j in m.I)
-
-    def x(m, i):
-        return x_0 + sum(K_tilde[i, j] * m.alpha_x[j] for j in m.I)
-
-    def dmu_dt(m, i):
-        return sum(K[i, j] * m.alpha_mu[j] for j in m.I)
-
-    def dx_dt(m, i):
-        return sum(K[i, j] * m.alpha_x[j] for j in m.I)
-
-    def u(m, i):
-        return m.u_0 + sum(K_tilde[i, j] * m.alpha_u[j] for j in m.I)
-    
-    # Define constraints and objective for model and solve
-    @m.Constraint(m.I)  # for each index in m.I
-    def dx_dt_constraint(m, i):
-        return dx_dt(m, i) == (1 - x(m, i))*u(m, i)- beta*x(m,i)
-
+    n_variables = 3 * n_train + 2
+    n_constraints = 4 * n_train
     gamma = (beta + rho_hat) / c
-    @m.Constraint(m.I)  # for each index in m.I
-    def dmu_dt_constraint(m, i):
-        return dmu_dt(m, i) == -gamma + (rho_hat + beta)*mu(m, i) + mu(m, i)*u(m, i)
+    control_power = (1.0 - kappa) / kappa
+    u_0_guess = max(beta * x_0 / max(1.0 - x_0, DOMAIN_EPS), DOMAIN_EPS)
+    mu_0_guess = max(gamma / (rho_hat + beta + u_0_guess), DOMAIN_EPS)
+    x_initial = np.zeros(n_variables, dtype=np.float64)
+    x_initial[3 * n_train] = mu_0_guess
+    x_initial[3 * n_train + 1] = u_0_guess
 
-    @m.Constraint(m.I)  # for each index in m.I
-    def shadow_price(m, i):
-        return u(m, i)**((1.0-kappa)/kappa) - kappa*mu(m, i)*(1 - x(m, i)) == 0.0
-    
-    @m.Objective(sense=pyo.minimize)
-    def min_norm(m):  # alpha @ K @ alpha not supported by pyomo
-        return sum(K[i, j] * m.alpha_mu[i] * m.alpha_mu[j] for i in m.I for j in m.I)+sum(K[i, j] * m.alpha_x[i] * m.alpha_x[j] for i in m.I for j in m.I) 
+    def unpack(z):
+        alpha_x = z[:n_train]
+        alpha_mu = z[n_train : 2 * n_train]
+        alpha_u = z[2 * n_train : 3 * n_train]
+        mu_0 = z[3 * n_train]
+        u_0 = z[3 * n_train + 1]
+        return alpha_x, alpha_mu, alpha_u, mu_0, u_0
 
-    solver = pyo.SolverFactory(solver_type)
-    options = {
-        "tol": 1e-6,  # Tighten the tolerance for optimality
-        "dual_inf_tol": 1e-6,  # Tighten the dual infeasibility tolerance
-        "constr_viol_tol": 1e-6,  # Tighten the constraint violation tolerance
-        "max_iter": 1000,  # Adjust the maximum number of iterations if needed
-    } 
-    results = solver.solve(m, tee=verbose, options=options)
-    if not results.solver.termination_condition == TerminationCondition.optimal:
-        print(str(results.solver))  # raise exception?
+    def path_values(z, K_eval, K_tilde_eval):
+        alpha_x, alpha_mu, alpha_u, mu_0, u_0 = unpack(z)
+        x = x_0 + K_tilde_eval @ alpha_x
+        mu = mu_0 + K_tilde_eval @ alpha_mu
+        u = u_0 + K_tilde_eval @ alpha_u
+        dx_dt = K_eval @ alpha_x
+        dmu_dt = K_eval @ alpha_mu
+        return x, mu, u, dx_dt, dmu_dt
 
-    alpha_mu = jnp.array([pyo.value(m.alpha_mu[i]) for i in m.I])
-    alpha_x = jnp.array([pyo.value(m.alpha_x[i]) for i in m.I])
-    alpha_u = jnp.array([pyo.value(m.alpha_u[i]) for i in m.I])
-    u_0 = pyo.value(m.u_0)
-    mu_0 = pyo.value(m.mu_0)
-
-    # Interpolator using training data
-    @jax.jit
-    def kernel_solution(test_data):
-        # pointwise comparison test_data to train_data
-        K_test, K_tilde_test = integrated_matern_kernel_matrices(
-            test_data, train_data, nu, sigma, rho
+    def objective(z):
+        alpha_x, alpha_mu, alpha_u, _, _ = unpack(z)
+        return (
+            alpha_x @ K_jax @ alpha_x
+            + alpha_mu @ K_jax @ alpha_mu
+            + alpha_u @ K_jax @ alpha_u
         )
-        mu_test = mu_0 + K_tilde_test @ alpha_mu
-        x_test = x_0 + K_tilde_test @ alpha_x
-        u_test = u_0 + K_tilde_test @ alpha_u
+
+    def constraints(z):
+        x, mu, u, dx_dt, dmu_dt = path_values(z, K_jax, K_tilde_jax)
+        state = dx_dt - ((1.0 - x) * u - beta * x)
+        costate = dmu_dt - (-gamma + (rho_hat + beta) * mu + mu * u)
+        shadow_price = u**control_power - kappa * mu * (1.0 - x)
+        return jnp.concatenate([state, costate, shadow_price, u])
+
+    def lagrangian(z, objective_multiplier, multipliers):
+        return objective_multiplier * objective(z) + jnp.dot(multipliers, constraints(z))
+
+    objective_value = jax.jit(objective)
+    objective_gradient = jax.jit(jax.grad(objective))
+    constraint_values = jax.jit(constraints)
+    constraint_jacobian = jax.jit(jax.jacfwd(constraints))
+    lagrangian_hessian = jax.jit(jax.hessian(lagrangian, argnums=0))
+
+    x_initial_jax = jnp.asarray(x_initial)
+    zero_multipliers = jnp.zeros(n_constraints, dtype=jnp.float64)
+    jax.block_until_ready(objective_value(x_initial_jax))
+    jax.block_until_ready(objective_gradient(x_initial_jax))
+    jax.block_until_ready(constraint_values(x_initial_jax))
+    jax.block_until_ready(constraint_jacobian(x_initial_jax))
+    jax.block_until_ready(lagrangian_hessian(x_initial_jax, 1.0, zero_multipliers))
+
+    variable_lower_bounds = np.full(n_variables, -np.inf, dtype=np.float64)
+    variable_upper_bounds = np.full(n_variables, np.inf, dtype=np.float64)
+    variable_lower_bounds[3 * n_train] = 0.0
+    variable_lower_bounds[3 * n_train + 1] = DOMAIN_EPS
+    constraint_lower_bounds = np.concatenate(
+        [
+            np.zeros(3 * n_train, dtype=np.float64),
+            np.full(n_train, DOMAIN_EPS, dtype=np.float64),
+        ]
+    )
+    constraint_upper_bounds = np.concatenate(
+        [
+            np.zeros(3 * n_train, dtype=np.float64),
+            np.full(n_train, np.inf, dtype=np.float64),
+        ]
+    )
+
+    model = unopy.Model(
+        unopy.PROBLEM_NONLINEAR,
+        n_variables,
+        variable_lower_bounds,
+        variable_upper_bounds,
+        unopy.ZERO_BASED_INDEXING,
+    )
+
+    def objective_callback(z):
+        return float(objective_value(jnp.asarray(z)))
+
+    def objective_gradient_callback(z, gradient):
+        gradient[:] = np.asarray(objective_gradient(jnp.asarray(z)))
+
+    model.set_objective(
+        unopy.MINIMIZE, objective_callback, objective_gradient_callback
+    )
+
+    jacobian_rows = np.repeat(np.arange(n_constraints, dtype=np.int32), n_variables)
+    jacobian_columns = np.tile(np.arange(n_variables, dtype=np.int32), n_constraints)
+
+    def constraints_callback(z, constraint_output):
+        constraint_output[:] = np.asarray(constraint_values(jnp.asarray(z)))
+
+    def jacobian_callback(z, jacobian_output):
+        jacobian_output[:] = np.asarray(
+            constraint_jacobian(jnp.asarray(z))
+        ).reshape(-1)
+
+    model.set_constraints(
+        n_constraints,
+        constraints_callback,
+        constraint_lower_bounds,
+        constraint_upper_bounds,
+        len(jacobian_rows),
+        jacobian_rows,
+        jacobian_columns,
+        jacobian_callback,
+    )
+
+    hessian_rows, hessian_columns = np.tril_indices(n_variables)
+    hessian_rows = hessian_rows.astype(np.int32)
+    hessian_columns = hessian_columns.astype(np.int32)
+
+    def hessian_callback(z, objective_multiplier, multipliers, hessian_output):
+        hessian = np.asarray(
+            lagrangian_hessian(
+                jnp.asarray(z),
+                float(objective_multiplier),
+                jnp.asarray(multipliers),
+            )
+        )
+        hessian_output[:] = hessian[hessian_rows, hessian_columns]
+
+    model.set_lagrangian_hessian(
+        len(hessian_rows),
+        unopy.LOWER_TRIANGLE,
+        hessian_rows,
+        hessian_columns,
+        hessian_callback,
+    )
+    model.set_lagrangian_sign_convention(unopy.MULTIPLIER_POSITIVE)
+    model.set_initial_primal_iterate(x_initial)
+
+    solver = unopy.UnoSolver()
+    options = dict(NLP_OPTIONS)
+    solver.set_preset(options.pop("preset"))
+    if not verbose:
+        solver.set_option("logger", "SILENT")
+        solver.set_option("print_solution", False)
+    for option_name, option_value in options.items():
+        solver.set_option(option_name, option_value)
+
+    start = time.perf_counter()
+    result = solver.optimize(model)
+    elapsed = time.perf_counter() - start
+
+    z = jnp.asarray(np.array(result.primal_solution, dtype=np.float64))
+    alpha_x, alpha_mu, alpha_u, mu_0, u_0 = unpack(z)
+    rkhs_norms = {
+        "x": rkhs_norm_squared(alpha_x, K),
+        "mu": rkhs_norm_squared(alpha_mu, K),
+        "u": rkhs_norm_squared(alpha_u, K),
+    }
+
+    train_constraints = constraints(z)
+    train_residuals = {
+        "state": train_constraints[:n_train],
+        "costate": train_constraints[n_train : 2 * n_train],
+        "shadow_price": train_constraints[2 * n_train : 3 * n_train],
+    }
+    max_train_residual = max(
+        float(jnp.max(jnp.abs(residual))) for residual in train_residuals.values()
+    )
+
+    @jax.jit
+    def kernel_solution(test_points_data):
+        K_test, K_tilde_test = integrated_matern_kernel_matrices(
+            test_points_data, train_data, nu, sigma, rho
+        )
+        x_test, mu_test, u_test, _, _ = path_values(z, K_test, K_tilde_test)
         return x_test, mu_test, u_test
 
-    # Generate test_data and compare to the benchmark
     x_test, mu_test, u_test = kernel_solution(test_data)
-
-    print(f"solve_time(s) = {results.solver.Time}")
+    solve_time = result.cpu_time
+    if solve_time is None:
+        solve_time = elapsed
+    solver_status = str(result.optimization_status).split(".")[-1]
+    solution_status = str(result.solution_status).split(".")[-1]
+    print(f"solve_time(s) = {solve_time}")
     return {
         "t_train": train_data,
         "t_test": test_data,
@@ -130,10 +245,19 @@ def optimal_advertising_matern(
         "u_test": u_test,
         "alpha_mu": alpha_mu,
         "alpha_x": alpha_x,
-        "mu_0": mu_0,
-        "u_0": u_0,
-        "solve_time": results.solver.Time,
-        "kernel_solution": kernel_solution,  # interpolator
+        "alpha_u": alpha_u,
+        "mu_0": float(mu_0),
+        "u_0": float(u_0),
+        "rkhs_norms": rkhs_norms,
+        "train_residuals": train_residuals,
+        "max_train_residual": max_train_residual,
+        "solve_time": solve_time,
+        "wall_time": elapsed,
+        "solver_status": solver_status,
+        "solution_status": solution_status,
+        "stationarity": result.solution_stationarity,
+        "primal_feasibility": result.solution_primal_feasibility,
+        "kernel_solution": kernel_solution,
     }
 
 
