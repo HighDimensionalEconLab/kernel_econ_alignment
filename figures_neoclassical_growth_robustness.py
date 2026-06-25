@@ -1,13 +1,10 @@
-import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import os
 import jsonargparse
 from neoclassical_growth_matern import neoclassical_growth_matern
 
 from mpl_toolkits.axes_grid1.inset_locator import (
     zoomed_inset_axes,
     mark_inset,
-    inset_axes,
 )
 
 fontsize = 14
@@ -59,7 +56,7 @@ def plot_neoclassical_growth(
     plt.xlabel("Time")
     plt.legend()  # Show legend with labels
 
-    ax_rel_k = plt.subplot(2, 2, 2)
+    plt.subplot(2, 2, 2)
 
     plt.plot(
         t,
@@ -85,7 +82,7 @@ def plot_neoclassical_growth(
     plt.xlabel("Time")
     plt.legend()  # Show legend with labels
 
-    ax_rel_c = plt.subplot(2, 2, 4)
+    plt.subplot(2, 2, 4)
 
     plt.plot(
         t,
@@ -102,7 +99,7 @@ def plot_neoclassical_growth(
     plt.tight_layout()  # Adjust layout to prevent overlap
 
     # Zoom in part of the plot
-    if zoom == True:
+    if zoom is True:
         time_window = (
             zoom_loc  # Indices: The window on the x-axis that want to be zoomed in
         )

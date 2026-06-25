@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 import jsonargparse
 import numpy as np
-import cvxpy as cp
+import unopy
 from jax import config
 from nlls_gram import UnderdeterminedLevenbergMarquardt
 
@@ -14,12 +14,9 @@ from rkhs import rkhs_norm_squared
 
 config.update("jax_enable_x64", True)
 
-# CVXPY DNLP implementation. The two-capital (physical + human) FOC collocation
-# is nonconvex (Cobb-Douglas f = k**a_k h**a_h and bilinear
-# costate/feasibility/shadow-price relations), so CVXPY hands the smooth
-# nonlinear program to UNO. The human-capital DAE is equality-heavy and nearly
-# degenerate at t=0; UNO's IPOPT-style preset is much faster than filtersqp here.
-NLP_OPTIONS = dict(preset="ipopt", primal_tolerance=1e-5, dual_tolerance=1e-5)
+NLP_OPTIONS = dict(preset="filtersqp", time_limit=5.0)
+ACCEPTED_SOLUTION_STATUSES = {"FEASIBLE_KKT_POINT", "FEASIBLE_SMALL_STEP"}
+DOMAIN_EPS = 1e-8
 
 
 def _human_capital_initial_residual(params, batch):
@@ -85,7 +82,7 @@ def human_capital_matern(
     a_h: float = 1 / 4,
     delta_k: float = 0.1,
     delta_h: float = 0.05,
-    rho_hat: float = 0.11,  # discount rate
+    rho_hat: float = 0.11,
     k_0: float = 1.5,
     nu: float = 0.5,
     sigma: float = 1.0,
@@ -99,115 +96,282 @@ def human_capital_matern(
     train_points_list: Optional[List[float]] = None,
     verbose: bool = False,
 ):
-    # if passing in `train_points` then doesn't us a grid.  Otherwise, uses linspace
+    _ = benchmark_T
     if train_points_list is None:
         train_data = jnp.linspace(0, train_T, train_points)
     else:
         train_data = jnp.array(train_points_list)
     test_data = jnp.linspace(0, test_T, test_points)
+    validation_points = max(test_points, benchmark_points)
+    validation_data = jnp.linspace(0, train_T, validation_points)
 
-    # Construct kernel matrices. CVXPY needs numpy arrays at the solver boundary.
-    N = len(train_data)
+    n_train = len(train_data)
     K, K_tilde = integrated_matern_kernel_matrices(
         train_data, train_data, nu, sigma, rho
     )
-    K = np.asarray((K + K.T) / 2)  # symmetrize -> exactly PSD for quad_form
+    K = np.asarray((K + K.T) / 2)
     K_tilde = np.asarray(K_tilde)
+    K_jax = jnp.asarray(K)
+    K_tilde_jax = jnp.asarray(K_tilde)
 
-    # Solve for initial human capital and steady-flow consumption with JAX
-    # float64. The log-parameterization keeps both variables positive during LM
-    # trial steps. h_0 is fixed by the synchronized initial condition below;
-    # c_0_init is only a warm start for the NLP's free c_0 variable.
     h_0_jax, c_0_init_jax, initial_residual, _ = human_capital_initial_conditions(
         a_k, a_h, delta_k, delta_h, k_0
     )
     h_0 = float(h_0_jax)
     c_0_init = float(c_0_init_jax)
-    if float(jnp.linalg.norm(initial_residual, ord=jnp.inf)) > 1e-10:
-        print(f"initial-condition residual: {initial_residual}")
 
-    # Decision variables (7 coefficient vectors, 5 scalars), initialized at the
-    # analytic steady-flow point for the local NLP solve.
-    alpha_k, alpha_h = cp.Variable(N), cp.Variable(N)
-    alpha_mu_k, alpha_mu_h = cp.Variable(N), cp.Variable(N)
-    alpha_i_k, alpha_i_h, alpha_c = cp.Variable(N), cp.Variable(N), cp.Variable(N)
-    i_k_0 = cp.Variable(nonneg=True)
-    i_h_0 = cp.Variable(nonneg=True)
-    c_0 = cp.Variable(nonneg=True)
-    mu_k_0 = cp.Variable(nonneg=True)
-    mu_h_0 = cp.Variable(nonneg=True)
-    for v in (alpha_k, alpha_h, alpha_mu_k, alpha_mu_h, alpha_i_k, alpha_i_h, alpha_c):
-        v.value = np.zeros(N)
-    i_k_0.value = delta_k * k_0
-    i_h_0.value = delta_h * h_0
-    c_0.value = c_0_init
-    mu_k_0.value = mu_h_0.value = 1 / c_0_init
+    n_functions = 7
+    n_scalars = 5
+    n_variables = n_functions * n_train + n_scalars
+    n_equalities = 7 * n_train
+    n_constraints = 14 * n_train
+    x_initial = np.zeros(n_variables, dtype=np.float64)
+    scalar_start = n_functions * n_train
+    x_initial[scalar_start] = delta_k * k_0
+    x_initial[scalar_start + 1] = delta_h * h_0
+    x_initial[scalar_start + 2] = c_0_init
+    x_initial[scalar_start + 3] = 1.0 / c_0_init
+    x_initial[scalar_start + 4] = 1.0 / c_0_init
 
-    # Affine kernel expansions. k/h are the physical/human capital states,
-    # i_k/i_h investments, c consumption, mu_* costates.
-    k = k_0 + K_tilde @ alpha_k
-    h = h_0 + K_tilde @ alpha_h
-    i_k = i_k_0 + K_tilde @ alpha_i_k
-    i_h = i_h_0 + K_tilde @ alpha_i_h
-    c = c_0 + K_tilde @ alpha_c
-    mu_k = mu_k_0 + K_tilde @ alpha_mu_k
-    mu_h = mu_h_0 + K_tilde @ alpha_mu_h
-    dk_dt = K @ alpha_k
-    dh_dt = K @ alpha_h
-    dmu_k_dt = K @ alpha_mu_k
-    dmu_h_dt = K @ alpha_mu_h
+    def unpack(x):
+        alpha_k = x[:n_train]
+        alpha_h = x[n_train : 2 * n_train]
+        alpha_i_k = x[2 * n_train : 3 * n_train]
+        alpha_i_h = x[3 * n_train : 4 * n_train]
+        alpha_c = x[4 * n_train : 5 * n_train]
+        alpha_mu_k = x[5 * n_train : 6 * n_train]
+        alpha_mu_h = x[6 * n_train : 7 * n_train]
+        i_k_0 = x[7 * n_train]
+        i_h_0 = x[7 * n_train + 1]
+        c_0 = x[7 * n_train + 2]
+        mu_k_0 = x[7 * n_train + 3]
+        mu_h_0 = x[7 * n_train + 4]
+        return (
+            alpha_k,
+            alpha_h,
+            alpha_i_k,
+            alpha_i_h,
+            alpha_c,
+            alpha_mu_k,
+            alpha_mu_h,
+            i_k_0,
+            i_h_0,
+            c_0,
+            mu_k_0,
+            mu_h_0,
+        )
 
-    # Cobb-Douglas production and its marginal products as cvxpy expressions.
-    f = cp.multiply(cp.power(k, a_k), cp.power(h, a_h))
-    f_k = a_k * cp.multiply(cp.power(k, a_k - 1), cp.power(h, a_h))
-    f_h = a_h * cp.multiply(cp.power(k, a_k), cp.power(h, a_h - 1))
+    def path_values(x, K_eval, K_tilde_eval):
+        (
+            alpha_k,
+            alpha_h,
+            alpha_i_k,
+            alpha_i_h,
+            alpha_c,
+            alpha_mu_k,
+            alpha_mu_h,
+            i_k_0,
+            i_h_0,
+            c_0,
+            mu_k_0,
+            mu_h_0,
+        ) = unpack(x)
+        k = k_0 + K_tilde_eval @ alpha_k
+        h = h_0 + K_tilde_eval @ alpha_h
+        i_k = i_k_0 + K_tilde_eval @ alpha_i_k
+        i_h = i_h_0 + K_tilde_eval @ alpha_i_h
+        c = c_0 + K_tilde_eval @ alpha_c
+        mu_k = mu_k_0 + K_tilde_eval @ alpha_mu_k
+        mu_h = mu_h_0 + K_tilde_eval @ alpha_mu_h
+        dk_dt = K_eval @ alpha_k
+        dh_dt = K_eval @ alpha_h
+        dmu_k_dt = K_eval @ alpha_mu_k
+        dmu_h_dt = K_eval @ alpha_mu_h
+        return k, h, i_k, i_h, c, mu_k, mu_h, dk_dt, dh_dt, dmu_k_dt, dmu_h_dt
 
-    # Ridgeless RKHS objective: every independent kernel-represented economic
-    # function contributes its squared RKHS norm.
-    rkhs_objective = (
-        cp.quad_form(alpha_k, cp.psd_wrap(K))
-        + cp.quad_form(alpha_h, cp.psd_wrap(K))
-        + cp.quad_form(alpha_i_k, cp.psd_wrap(K))
-        + cp.quad_form(alpha_i_h, cp.psd_wrap(K))
-        + cp.quad_form(alpha_c, cp.psd_wrap(K))
-        + cp.quad_form(alpha_mu_k, cp.psd_wrap(K))
-        + cp.quad_form(alpha_mu_h, cp.psd_wrap(K))
-    )
-    prob = cp.Problem(
-        cp.Minimize(rkhs_objective),
+    def production_terms(k, h):
+        k_positive = jnp.maximum(k, DOMAIN_EPS)
+        h_positive = jnp.maximum(h, DOMAIN_EPS)
+        f = (k_positive**a_k) * (h_positive**a_h)
+        f_k = a_k * (k_positive ** (a_k - 1.0)) * (h_positive**a_h)
+        f_h = a_h * (k_positive**a_k) * (h_positive ** (a_h - 1.0))
+        return f, f_k, f_h
+
+    def objective(x):
+        (
+            alpha_k,
+            alpha_h,
+            alpha_i_k,
+            alpha_i_h,
+            alpha_c,
+            alpha_mu_k,
+            alpha_mu_h,
+            *_,
+        ) = unpack(x)
+        return (
+            alpha_k @ K_jax @ alpha_k
+            + alpha_h @ K_jax @ alpha_h
+            + alpha_i_k @ K_jax @ alpha_i_k
+            + alpha_i_h @ K_jax @ alpha_i_h
+            + alpha_c @ K_jax @ alpha_c
+            + alpha_mu_k @ K_jax @ alpha_mu_k
+            + alpha_mu_h @ K_jax @ alpha_mu_h
+        )
+
+    def constraints(x):
+        (
+            k,
+            h,
+            i_k,
+            i_h,
+            c,
+            mu_k,
+            mu_h,
+            dk_dt,
+            dh_dt,
+            dmu_k_dt,
+            dmu_h_dt,
+        ) = path_values(x, K_jax, K_tilde_jax)
+        f, f_k, f_h = production_terms(k, h)
+        equalities = jnp.concatenate(
+            [
+                dk_dt - (i_k - delta_k * k),
+                dh_dt - (i_h - delta_h * h),
+                dmu_k_dt + mu_k * (f_k - delta_k - rho_hat),
+                dmu_h_dt + mu_h * (f_h - delta_h - rho_hat),
+                c + i_h + i_k - f,
+                mu_k * c - 1.0,
+                mu_k - mu_h,
+            ]
+        )
+        positive_domains = jnp.concatenate([k, h, i_k, i_h, c, mu_k, mu_h])
+        return jnp.concatenate([equalities, positive_domains])
+
+    def lagrangian(x, objective_multiplier, multipliers):
+        return objective_multiplier * objective(x) + jnp.dot(multipliers, constraints(x))
+
+    objective_value = jax.jit(objective)
+    objective_gradient = jax.jit(jax.grad(objective))
+    constraint_values = jax.jit(constraints)
+    constraint_jacobian = jax.jit(jax.jacfwd(constraints))
+    lagrangian_hessian = jax.jit(jax.hessian(lagrangian, argnums=0))
+
+    x_initial_jax = jnp.asarray(x_initial)
+    zero_multipliers = jnp.zeros(n_constraints, dtype=jnp.float64)
+    jax.block_until_ready(objective_value(x_initial_jax))
+    jax.block_until_ready(objective_gradient(x_initial_jax))
+    jax.block_until_ready(constraint_values(x_initial_jax))
+    jax.block_until_ready(constraint_jacobian(x_initial_jax))
+    jax.block_until_ready(lagrangian_hessian(x_initial_jax, 1.0, zero_multipliers))
+
+    variable_lower_bounds = np.full(n_variables, -np.inf, dtype=np.float64)
+    variable_upper_bounds = np.full(n_variables, np.inf, dtype=np.float64)
+    variable_lower_bounds[scalar_start:] = DOMAIN_EPS
+    constraint_lower_bounds = np.concatenate(
         [
-            dk_dt == i_k - delta_k * k,  # physical capital accumulation
-            dh_dt == i_h - delta_h * h,  # human capital accumulation
-            dmu_k_dt == -cp.multiply(mu_k, f_k - delta_k - rho_hat),  # physical Euler
-            dmu_h_dt == -cp.multiply(mu_h, f_h - delta_h - rho_hat),  # human Euler
-            c + i_h + i_k - f == 0.0,  # resource feasibility
-            cp.multiply(mu_k, c) == 1.0,  # shadow price
-            mu_k - mu_h == 0.0,  # both capitals priced equally
-        ],
+            np.zeros(n_equalities, dtype=np.float64),
+            np.full(7 * n_train, DOMAIN_EPS, dtype=np.float64),
+        ]
     )
-    assert prob.is_dnlp()
-    options = dict(NLP_OPTIONS)
-    if not verbose:
-        options["logger"] = "SILENT"  # mute UNO's C-level iteration table
-    start = time.perf_counter()
-    prob.solve(nlp=True, solver=cp.UNO, verbose=verbose, **options)
-    elapsed = time.perf_counter() - start
-    print(f"elapsed solve(s) = {elapsed}")
-    if prob.status not in ("optimal", "optimal_inaccurate"):
-        print(f"solver status: {prob.status}")
+    constraint_upper_bounds = np.concatenate(
+        [
+            np.zeros(n_equalities, dtype=np.float64),
+            np.full(7 * n_train, np.inf, dtype=np.float64),
+        ]
+    )
 
-    alpha_c = jnp.array(alpha_c.value)
-    alpha_k = jnp.array(alpha_k.value)
-    alpha_h = jnp.array(alpha_h.value)
-    alpha_i_k = jnp.array(alpha_i_k.value)
-    alpha_i_h = jnp.array(alpha_i_h.value)
-    alpha_mu_k = jnp.array(alpha_mu_k.value)
-    alpha_mu_h = jnp.array(alpha_mu_h.value)
-    c_0 = float(c_0.value)
-    i_k_0 = float(i_k_0.value)
-    i_h_0 = float(i_h_0.value)
-    mu_k_0 = float(mu_k_0.value)
-    mu_h_0 = float(mu_h_0.value)
+    model = unopy.Model(
+        unopy.PROBLEM_NONLINEAR,
+        n_variables,
+        variable_lower_bounds,
+        variable_upper_bounds,
+        unopy.ZERO_BASED_INDEXING,
+    )
+
+    def objective_callback(x):
+        return float(objective_value(jnp.asarray(x)))
+
+    def objective_gradient_callback(x, gradient):
+        gradient[:] = np.asarray(objective_gradient(jnp.asarray(x)))
+
+    model.set_objective(
+        unopy.MINIMIZE, objective_callback, objective_gradient_callback
+    )
+
+    jacobian_rows = np.repeat(np.arange(n_constraints, dtype=np.int32), n_variables)
+    jacobian_columns = np.tile(np.arange(n_variables, dtype=np.int32), n_constraints)
+
+    def constraints_callback(x, constraint_output):
+        constraint_output[:] = np.asarray(constraint_values(jnp.asarray(x)))
+
+    def jacobian_callback(x, jacobian_output):
+        jacobian_output[:] = np.asarray(
+            constraint_jacobian(jnp.asarray(x))
+        ).reshape(-1)
+
+    model.set_constraints(
+        n_constraints,
+        constraints_callback,
+        constraint_lower_bounds,
+        constraint_upper_bounds,
+        len(jacobian_rows),
+        jacobian_rows,
+        jacobian_columns,
+        jacobian_callback,
+    )
+
+    hessian_rows, hessian_columns = np.tril_indices(n_variables)
+    hessian_rows = hessian_rows.astype(np.int32)
+    hessian_columns = hessian_columns.astype(np.int32)
+
+    def hessian_callback(x, objective_multiplier, multipliers, hessian_output):
+        hessian = np.asarray(
+            lagrangian_hessian(
+                jnp.asarray(x),
+                float(objective_multiplier),
+                jnp.asarray(multipliers),
+            )
+        )
+        hessian_output[:] = hessian[hessian_rows, hessian_columns]
+
+    model.set_lagrangian_hessian(
+        len(hessian_rows),
+        unopy.LOWER_TRIANGLE,
+        hessian_rows,
+        hessian_columns,
+        hessian_callback,
+    )
+    model.set_lagrangian_sign_convention(unopy.MULTIPLIER_POSITIVE)
+    model.set_initial_primal_iterate(x_initial)
+
+    solver = unopy.UnoSolver()
+    options = dict(NLP_OPTIONS)
+    solver.set_preset(options.pop("preset"))
+    if not verbose:
+        solver.set_option("logger", "SILENT")
+        solver.set_option("print_solution", False)
+    for option_name, option_value in options.items():
+        solver.set_option(option_name, option_value)
+
+    start = time.perf_counter()
+    result = solver.optimize(model)
+    elapsed = time.perf_counter() - start
+
+    x = jnp.asarray(np.array(result.primal_solution, dtype=np.float64))
+    (
+        alpha_k,
+        alpha_h,
+        alpha_i_k,
+        alpha_i_h,
+        alpha_c,
+        alpha_mu_k,
+        alpha_mu_h,
+        i_k_0,
+        i_h_0,
+        c_0,
+        mu_k_0,
+        mu_h_0,
+    ) = unpack(x)
     rkhs_norms = {
         "k": rkhs_norm_squared(alpha_k, K),
         "h": rkhs_norm_squared(alpha_h, K),
@@ -218,22 +382,96 @@ def human_capital_matern(
         "mu_h": rkhs_norm_squared(alpha_mu_h, K),
     }
 
-    # Interpolator using training data
-    def kernel_solution(test_data):
-        # pointwise comparison test_data to train_data
+    def evaluate_grid(points_data):
+        K_eval, K_tilde_eval = integrated_matern_kernel_matrices(
+            points_data, train_data, nu, sigma, rho
+        )
+        (
+            k_values,
+            h_values,
+            i_k_values,
+            i_h_values,
+            c_values,
+            mu_k_values,
+            mu_h_values,
+            dk_values,
+            dh_values,
+            dmu_k_values,
+            dmu_h_values,
+        ) = path_values(x, K_eval, K_tilde_eval)
+        f_values, f_k_values, f_h_values = production_terms(k_values, h_values)
+        return {
+            "k": k_values,
+            "h": h_values,
+            "i_k": i_k_values,
+            "i_h": i_h_values,
+            "c": c_values,
+            "mu_k": mu_k_values,
+            "mu_h": mu_h_values,
+            "physical_accumulation": dk_values
+            - (i_k_values - delta_k * k_values),
+            "human_accumulation": dh_values - (i_h_values - delta_h * h_values),
+            "physical_euler": dmu_k_values
+            + mu_k_values * (f_k_values - delta_k - rho_hat),
+            "human_euler": dmu_h_values
+            + mu_h_values * (f_h_values - delta_h - rho_hat),
+            "feasibility": c_values + i_h_values + i_k_values - f_values,
+            "shadow_price": mu_k_values * c_values - 1.0,
+            "costate_gap": mu_k_values - mu_h_values,
+            "hidden_dae_residual": (f_k_values - delta_k)
+            - (f_h_values - delta_h),
+        }
+
+    train_eval = evaluate_grid(train_data)
+    validation_eval = evaluate_grid(validation_data)
+    test_eval = evaluate_grid(test_data)
+
+    residual_names = [
+        "physical_accumulation",
+        "human_accumulation",
+        "physical_euler",
+        "human_euler",
+        "feasibility",
+        "shadow_price",
+        "costate_gap",
+    ]
+    train_residuals = {name: train_eval[name] for name in residual_names}
+    validation_residuals = {
+        f"{name}_validation": validation_eval[name] for name in residual_names
+    }
+    max_train_residual = max(
+        float(jnp.max(jnp.abs(residual))) for residual in train_residuals.values()
+    )
+    max_validation_residual = max(
+        float(jnp.max(jnp.abs(residual))) for residual in validation_residuals.values()
+    )
+    finite_positive = bool(
+        all(
+            jnp.all(jnp.isfinite(test_eval[name]))
+            and jnp.all(jnp.isfinite(validation_eval[name]))
+            and jnp.min(test_eval[name]) > 0.0
+            and jnp.min(validation_eval[name]) > 0.0
+            for name in ["k", "h", "i_k", "i_h", "c", "mu_k", "mu_h"]
+        )
+    )
+
+    @jax.jit
+    def kernel_solution(test_points_data):
         K_test, K_tilde_test = integrated_matern_kernel_matrices(
-            test_data, train_data, nu, sigma, rho
+            test_points_data, train_data, nu, sigma, rho
         )
-        c_test = c_0 + K_tilde_test @ alpha_c
-        k_test = k_0 + K_tilde_test @ alpha_k
-        h_test = h_0 + K_tilde_test @ alpha_h
-        i_k_test = i_k_0 + K_tilde_test @ alpha_i_k
-        i_h_test = i_h_0 + K_tilde_test @ alpha_i_h
-        mu_k_test = mu_k_0 + K_tilde_test @ alpha_mu_k
-        mu_h_test = mu_h_0 + K_tilde_test @ alpha_mu_h
-        feasibility_test = (
-            c_test + i_h_test + i_k_test - (k_test**a_k) * (h_test**a_h)
-        )
+        (
+            k_test,
+            h_test,
+            i_k_test,
+            i_h_test,
+            c_test,
+            mu_k_test,
+            mu_h_test,
+            *_,
+        ) = path_values(x, K_test, K_tilde_test)
+        f_test, _, _ = production_terms(k_test, h_test)
+        feasibility_test = c_test + i_h_test + i_k_test - f_test
         return (
             k_test,
             h_test,
@@ -245,37 +483,35 @@ def human_capital_matern(
             feasibility_test,
         )
 
-    # Generate test_data
-    (
-        k_test,
-        h_test,
-        c_test,
-        i_k_test,
-        i_h_test,
-        mu_k_test,
-        mu_h_test,
-        feasibility_test,
-    ) = kernel_solution(test_data)
-    f_k_test = a_k * (k_test ** (a_k - 1.0)) * (h_test**a_h)
-    f_h_test = a_h * (k_test**a_k) * (h_test ** (a_h - 1.0))
-    hidden_dae_residual_test = (f_k_test - delta_k) - (f_h_test - delta_h)
-
-    solve_time = prob.solver_stats.solve_time
+    solve_time = result.cpu_time
     if solve_time is None:
         solve_time = elapsed
+    solver_status = str(result.optimization_status).split(".")[-1]
+    solution_status = str(result.solution_status).split(".")[-1]
+    rejection_reasons = []
+    if solver_status != "SUCCESS":
+        rejection_reasons.append("solver_status")
+    if solution_status not in ACCEPTED_SOLUTION_STATUSES:
+        rejection_reasons.append("solution_status")
+    if not finite_positive:
+        rejection_reasons.append("nonfinite_or_nonpositive")
+    if max_train_residual > 1e-5:
+        rejection_reasons.append("train_residual")
+    valid_solution = not rejection_reasons
+
     print(f"solve_time(s) = {solve_time}")
     return {
         "t_train": train_data,
         "t_test": test_data,
-        "k_test": k_test,
-        "h_test": h_test,
-        "c_test": c_test,
-        "i_k_test": i_k_test,
-        "i_h_test": i_h_test,
-        "mu_k_test": mu_k_test,
-        "mu_h_test": mu_h_test,
-        "feasibility_test": feasibility_test,
-        "hidden_dae_residual_test": hidden_dae_residual_test,
+        "k_test": test_eval["k"],
+        "h_test": test_eval["h"],
+        "c_test": test_eval["c"],
+        "i_k_test": test_eval["i_k"],
+        "i_h_test": test_eval["i_h"],
+        "mu_k_test": test_eval["mu_k"],
+        "mu_h_test": test_eval["mu_h"],
+        "feasibility_test": test_eval["feasibility"],
+        "hidden_dae_residual_test": test_eval["hidden_dae_residual"],
         "alpha_c": alpha_c,
         "alpha_k": alpha_k,
         "alpha_h": alpha_h,
@@ -283,15 +519,27 @@ def human_capital_matern(
         "alpha_i_h": alpha_i_h,
         "alpha_mu_k": alpha_mu_k,
         "alpha_mu_h": alpha_mu_h,
-        "c_0": c_0,
+        "c_0": float(c_0),
         "h_0": h_0,
-        "i_k_0": i_k_0,
-        "i_h_0": i_h_0,
-        "mu_k_0": mu_k_0,
-        "mu_h_0": mu_h_0,
+        "i_k_0": float(i_k_0),
+        "i_h_0": float(i_h_0),
+        "mu_k_0": float(mu_k_0),
+        "mu_h_0": float(mu_h_0),
+        "initial_condition_residual": initial_residual,
         "rkhs_norms": rkhs_norms,
+        "train_residuals": train_residuals,
+        "validation_residuals": validation_residuals,
+        "max_train_residual": max_train_residual,
+        "max_validation_residual": max_validation_residual,
         "solve_time": solve_time,
-        "kernel_solution": kernel_solution,  # interpolator
+        "wall_time": elapsed,
+        "solver_status": solver_status,
+        "solution_status": solution_status,
+        "stationarity": result.solution_stationarity,
+        "primal_feasibility": result.solution_primal_feasibility,
+        "valid_solution": valid_solution,
+        "rejection_reason": "accepted" if valid_solution else ",".join(rejection_reasons),
+        "kernel_solution": kernel_solution,
     }
 
 

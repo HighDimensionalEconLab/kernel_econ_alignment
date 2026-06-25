@@ -2,8 +2,7 @@
 
 This repository uses ridgeless RKHS collocation: each independent kernel
 function is identified by including its squared RKHS norm, `alpha' K alpha`,
-in the objective. Algebraic helper variables introduced for solver reformulation
-are not penalized; they must be pinned by model equations and residual checks.
+in the objective. The active implementation uses direct JAX callbacks into UNO.
 
 ## Asset Pricing
 
@@ -11,8 +10,7 @@ are not penalized; they must be pinned by model equations and residual checks.
 - Algebraic helpers: none.
 - Objective: `||p||_H^2`.
 - Constraints: collocated asset-pricing ODE `dp/dt = r p - x(t)`.
-- Pyomo comparison: current CVXPY QP matches the old Pyomo objective and
-  equality constraint.
+- Solver implementation: direct JAX/UNO quadratic model.
 
 ## Basic Neoclassical Growth
 
@@ -21,26 +19,23 @@ are not penalized; they must be pinned by model equations and residual checks.
 - Objective: `||k||_H^2 + ||c||_H^2 + ||mu||_H^2`.
 - Constraints: resource equation, Euler equation, `mu*c = 1`, and positive
   domain guards for `k`, `c`, and `mu`.
-- Pyomo comparison: matches the old economic constraints; adding the `c` norm
+- Solver implementation: direct JAX/UNO nonlinear model; adding the `c` norm
   removes the former under-identification of consumption coefficients.
 
 ## Concave-Convex Growth
 
-- RKHS functions: capital `k`, costate `mu`.
-- Algebraic helpers: consumption `c`, production power `z`, output `Y`, and
-  marginal product `P`.
-- Objective: `||k||_H^2 + ||mu||_H^2`.
-- Constraints: solve smooth active-branch candidates for each branch of
-  `A max(k^a, b_1 k^a - b_2)`, then accept only candidates that validate
-  against the original max problem: resource residual, Euler residual,
-  `c*mu = 1`, output binding, and the subgradient interval `m1 <= P <= m2`
-  using the marginal product implied by the costate equation. Residuals are
-  checked on the collocation grid and a denser validation grid over the training
-  horizon; the plotted extrapolation tail is checked for finite positive values.
-- Pyomo comparison: preserves the same reduced RKHS functions as the old Pyomo
-  model while replacing `Expr_if` with conservative active-branch enumeration
-  and ex-post validation. Ambiguous or invalid candidates are rejected rather
-  than silently plotted.
+- RKHS functions: capital `k`, consumption `c`, costate `mu`.
+- Algebraic helpers: diagnostic production power `z`, output `Y`, and marginal
+  product `P` returned after the solve.
+- Objective: `||k||_H^2 + ||c||_H^2 + ||mu||_H^2`.
+- Constraints: same economic equations as basic growth with production replaced
+  by `A max(k^a, b_1 k^a - b_2)`. JAX traces the max production function and its
+  marginal product directly; the solver does not use steady states, basin
+  thresholds, or branch enumeration. Residuals are checked on the collocation
+  grid and a denser validation grid; ambiguous crossing/local-solve failures
+  are rejected quickly rather than silently plotted.
+- Solver implementation: thin public wrapper around `neoclassical_growth_matern`
+  with kinked production parameters.
 
 ## Human Capital
 
@@ -50,8 +45,8 @@ are not penalized; they must be pinned by model equations and residual checks.
 - Objective: sum of all seven squared RKHS norms.
 - Constraints: two accumulation equations, two Euler equations, resource
   feasibility, `mu_k*c = 1`, and `mu_k = mu_h`.
-- Pyomo comparison: matches the old constraints and promotes the former small
-  smoothing terms for `i_k`, `i_h`, and `c` into the ridgeless norm objective.
+- Solver implementation: direct JAX/UNO nonlinear model with the small
+  initial-condition system solved in JAX through `nlls_gram`.
 
 ## Optimal Advertising
 
@@ -60,5 +55,5 @@ are not penalized; they must be pinned by model equations and residual checks.
 - Objective: `||x||_H^2 + ||mu||_H^2 + ||u||_H^2`.
 - Constraints: market-share dynamics, costate equation, advertising marginal
   condition, and positive control guard `u >= 1e-8`.
-- Pyomo comparison: preserves the old equations and adds the missing RKHS norm
+- Solver implementation: direct JAX/UNO nonlinear model including the RKHS norm
   for the kernel-represented control.

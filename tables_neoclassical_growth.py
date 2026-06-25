@@ -11,8 +11,8 @@ def main():
     sol_rho_2 = neoclassical_growth_matern(rho=2)
     sol_rho_20 = neoclassical_growth_matern(rho=20)
 
-    k_rel_error = sol_default["k_rel_error"]
-    c_rel_error = sol_default["c_rel_error"]
+    sol_default["k_rel_error"]
+    sol_default["c_rel_error"]
 
     sols = [sol_default, sol_nu_1_5, sol_nu_2_5, sol_rho_2, sol_rho_20]
 

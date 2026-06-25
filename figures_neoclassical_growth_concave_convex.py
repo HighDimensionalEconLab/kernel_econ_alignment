@@ -158,7 +158,7 @@ def main():
     plt.xlabel("Time")
     plt.legend()  # Show legend with labels
 
-    #plt.savefig(output_path, format="pdf")
+    plt.savefig(output_path, format="pdf")
 
     # Sweep x_0 across the initial-condition range, skipping failed solves.
     sols = []

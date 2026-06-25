@@ -55,7 +55,7 @@ def default_threshold_grid():
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Probe concave-convex CVXPY/UNO solves under hard timeouts."
+        description="Probe concave-convex direct JAX/UNO solves under hard timeouts."
     )
     parser.add_argument("--timeout", type=float, default=5.0)
     parser.add_argument("--train-points", type=int, default=41)

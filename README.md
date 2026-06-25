@@ -18,9 +18,9 @@ Use `uv` for all Python environment management.
 uv sync
 ```
 
-The project uses CVXPY for optimization. Convex problems use CVXPY's standard
-open-source backends, and smooth nonlinear examples use UNO through the
-`unopy` wheel. No external optimizer executable or conda environment is needed.
+The project solves the RKHS collocation problems through direct JAX callbacks
+to UNO via the `unopy` wheel. No optimization DSL, external optimizer
+executable, or conda environment is needed.
 
 The human-capital example uses `nlls_gram` for its small JAX float64
 initial-condition solve.
@@ -58,9 +58,9 @@ print(sol["c_rel_error"].mean())
 
 ## Models
 
-- `asset_pricing_matern.py`: convex asset-pricing QP.
-- `neoclassical_growth_matern.py`: baseline neoclassical growth DNLP.
-- `neoclassical_growth_concave_convex_matern.py`: concave-convex growth DNLP.
+- `asset_pricing_matern.py`: asset-pricing QP.
+- `neoclassical_growth_matern.py`: baseline and optional kinked-production neoclassical growth DNLP.
+- `neoclassical_growth_concave_convex_matern.py`: concave-convex growth wrapper.
 - `neoclassical_human_capital_matern.py`: two-capital human-capital DNLP.
 - `optimal_advertising_matern.py`: optimal-advertising DNLP.
 

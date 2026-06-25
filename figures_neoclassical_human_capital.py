@@ -1,14 +1,7 @@
-import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import os
 import jsonargparse
 from neoclassical_human_capital_matern import human_capital_matern
 
-from mpl_toolkits.axes_grid1.inset_locator import (
-    zoomed_inset_axes,
-    mark_inset,
-    inset_axes,
-)
 
 fontsize = 17
 ticksize = 16
@@ -43,7 +36,7 @@ def main():
 
     # Plotting
 
-    ax_physical_capital = plt.subplot(4, 2, 1)
+    plt.subplot(4, 2, 1)
 
     plt.plot(t, k_hat, color="k", label=r"$\hat{x}_k(t)$: Kernel Approximation")
     #plt.axhline(y=sol["k_ss"], linestyle="-.", color="k", label=r"$k^*$:Steady-State")
@@ -52,7 +45,7 @@ def main():
     plt.xlabel("Time")
     plt.legend()  # Show legend with labels
 
-    ax_human_capital = plt.subplot(4, 2, 2)
+    plt.subplot(4, 2, 2)
 
     plt.plot(t, h_hat, color="k", label=r"$\hat{x}_h(t)$: Kernel Approximation")
     #plt.axhline(y=sol["h_ss"], linestyle="-.", color="grey", label=r"$h^*$: Steady-State")
@@ -61,7 +54,7 @@ def main():
     plt.xlabel("Time")
     plt.legend()  # Show legend with labels
 
-    ax_consumption = plt.subplot(4, 2, 3)
+    plt.subplot(4, 2, 3)
 
     plt.plot(t, c_hat, color="b", label=r"$\hat{y}_c(t)$: Kernel Approximation")
     #plt.axhline(y=sol["c_ss"], linestyle="-.", color="b", label=r"$c^*$: Steady-State")
@@ -70,7 +63,7 @@ def main():
     plt.xlabel("Time")
     plt.legend()  # Show legend with labels
 
-    ax_investment_k = plt.subplot(4, 2, 4)
+    plt.subplot(4, 2, 4)
 
     plt.plot(t, i_k_hat, color="b", label=r"$\hat{y}_k(t)$: Kernel Approximation")
     #plt.axhline(y=sol["i_k_ss"], linestyle="-.", color="k", label=r"$i_k^*$: Steady-State")
@@ -79,7 +72,7 @@ def main():
     plt.xlabel("Time")
     plt.legend()  # Show legend with labels
 
-    ax_investment_h = plt.subplot(4, 2, 5)
+    plt.subplot(4, 2, 5)
 
     plt.plot(t, i_h_hat, color="b", label=r"$\hat{y}_h(t)$: Kernel Approximation")
     #plt.axhline(y=sol["i_h_ss"], linestyle="-.", color="grey", label=r"$i_h^*$: Steady-State")
@@ -88,7 +81,7 @@ def main():
     plt.xlabel("Time")
     plt.legend()  # Show legend with labels
 
-    ax_investment_mu_k = plt.subplot(4, 2, 6)
+    plt.subplot(4, 2, 6)
 
     plt.plot(t, mu_k_hat, color="grey", label=r"$\hat{\mu}_k(t)$: Kernel Approximation")
     #plt.axhline(y=sol["i_h_ss"], linestyle="-.", color="grey", label=r"$i_h^*$: Steady-State")
@@ -97,7 +90,7 @@ def main():
     plt.xlabel("Time")
     plt.legend()  # Show legend with labels
 
-    ax_investment_mu_h = plt.subplot(4, 2, 7)
+    plt.subplot(4, 2, 7)
 
     plt.plot(t, mu_h_hat, color="grey", label=r"$\hat{\mu}_h(t)$: Kernel Approximation")
     #plt.axhline(y=sol["i_h_ss"], linestyle="-.", color="grey", label=r"$i_h^*$: Steady-State")

@@ -1,13 +1,10 @@
-import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import os
 import jsonargparse
 from asset_pricing_matern import asset_pricing_matern
 
 from mpl_toolkits.axes_grid1.inset_locator import (
     zoomed_inset_axes,
     mark_inset,
-    inset_axes,
 )
 
 fontsize = 17
@@ -49,7 +46,7 @@ def plot_asset_pricing(
     ax_prices = plt.subplot(1, 2, 1)
 
     plt.plot(
-        t, p_hat_matern, color="k", label=r"$\hat{\mu}(t)$: Kernel Approximation"#Mtérn 
+        t, p_hat_matern, color="k", label=r"$\hat{\mu}(t)$: Kernel Approximation"#Mtérn
     )
     plt.plot(
         t,
@@ -64,7 +61,7 @@ def plot_asset_pricing(
     plt.xlabel("Time")
     plt.legend()  # Show legend with labels
 
-    ax_rel = plt.subplot(1, 2, 2)
+    plt.subplot(1, 2, 2)
 
     plt.plot(
         t,
@@ -72,7 +69,7 @@ def plot_asset_pricing(
         color="k",
         label=r"$\varepsilon_{\mu}(t)$: Relative Errors",
     )#, Matérn Kernel Approx.
-   
+
     plt.axvline(x=T, color="k", linestyle=":", label="Extrapolation/Interpolation")
     plt.yscale("log")  # Set y-scale to logarithmic
     plt.ylim(p_rel_error_ylim[0], p_rel_error_ylim[1])
@@ -80,7 +77,7 @@ def plot_asset_pricing(
     plt.legend()  # Show legend with labels
 
     # Zoom in part of the plot
-    if zoom == True:
+    if zoom is True:
         time_window = (
             zoom_loc  # Indices: The window on the x-axis that want to be zoomed in
         )
