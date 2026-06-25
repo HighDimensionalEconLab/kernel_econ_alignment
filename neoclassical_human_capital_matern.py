@@ -17,8 +17,9 @@ config.update("jax_enable_x64", True)
 # CVXPY DNLP implementation. The two-capital (physical + human) FOC collocation
 # is nonconvex (Cobb-Douglas f = k**a_k h**a_h and bilinear
 # costate/feasibility/shadow-price relations), so CVXPY hands the smooth
-# nonlinear program to UNO.
-NLP_OPTIONS = dict(preset="filtersqp")
+# nonlinear program to UNO. The human-capital DAE is equality-heavy and nearly
+# degenerate at t=0; UNO's IPOPT-style preset is much faster than filtersqp here.
+NLP_OPTIONS = dict(preset="ipopt", primal_tolerance=1e-5, dual_tolerance=1e-5)
 
 
 def _human_capital_initial_residual(params, batch):
@@ -113,8 +114,10 @@ def human_capital_matern(
     K = np.asarray((K + K.T) / 2)  # symmetrize -> exactly PSD for quad_form
     K_tilde = np.asarray(K_tilde)
 
-    # Solve for initial human capital and consumption with JAX float64. The
-    # log-parameterization keeps both variables positive during LM trial steps.
+    # Solve for initial human capital and steady-flow consumption with JAX
+    # float64. The log-parameterization keeps both variables positive during LM
+    # trial steps. h_0 is fixed by the synchronized initial condition below;
+    # c_0_init is only a warm start for the NLP's free c_0 variable.
     h_0_jax, c_0_init_jax, initial_residual, _ = human_capital_initial_conditions(
         a_k, a_h, delta_k, delta_h, k_0
     )
@@ -253,6 +256,9 @@ def human_capital_matern(
         mu_h_test,
         feasibility_test,
     ) = kernel_solution(test_data)
+    f_k_test = a_k * (k_test ** (a_k - 1.0)) * (h_test**a_h)
+    f_h_test = a_h * (k_test**a_k) * (h_test ** (a_h - 1.0))
+    hidden_dae_residual_test = (f_k_test - delta_k) - (f_h_test - delta_h)
 
     solve_time = prob.solver_stats.solve_time
     if solve_time is None:
@@ -269,6 +275,7 @@ def human_capital_matern(
         "mu_k_test": mu_k_test,
         "mu_h_test": mu_h_test,
         "feasibility_test": feasibility_test,
+        "hidden_dae_residual_test": hidden_dae_residual_test,
         "alpha_c": alpha_c,
         "alpha_k": alpha_k,
         "alpha_h": alpha_h,

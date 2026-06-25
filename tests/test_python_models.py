@@ -115,12 +115,16 @@ class ModelSmokeTests(unittest.TestCase):
             "mu_k_test",
             "mu_h_test",
             "feasibility_test",
+            "hidden_dae_residual_test",
         ]:
             assert_all_finite(self, sol[key])
         assert_rkhs_norms(
             self, sol, {"k", "h", "i_k", "i_h", "c", "mu_k", "mu_h"}
         )
         self.assertLess(float(jnp.max(jnp.abs(sol["feasibility_test"]))), 5e-2)
+        self.assertLess(
+            float(jnp.max(jnp.abs(sol["hidden_dae_residual_test"]))), 1e-3
+        )
         self.assertLess(
             float(jnp.max(jnp.abs(sol["mu_k_test"] - sol["mu_h_test"]))), 1e-6
         )
